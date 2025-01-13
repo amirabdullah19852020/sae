@@ -2,6 +2,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 import torch
+from transformers import AutoTokenizer
+from nnsight import LanguageModel
+
 from TinySQL.training_data.fragments import field_names, table_names
 
 from .sae import Sae
@@ -183,3 +186,106 @@ class GroupedSaeOutput:
             if tag in tags:
                 match_indices.append(index)
         return match_indices
+
+
+class LoadedSAES:
+    def __init__(self, dataset_name: str, full_model_name: str, model_alias: str,
+                 tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
+                 layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict):
+
+        self.dataset_name = dataset_name
+        self.full_model_name = full_model_name
+        self.model_alias = model_alias
+        self.tokenizer = tokenizer
+        self.language_model = language_model
+        self.layers = layers
+        self.layer_to_directory = layer_to_directory
+        self.k = k
+        self.base_path = base_path
+        self.layer_to_saes = layer_to_saes
+
+        self.dataset = self.get_dataset()
+        self.mapped_dataset = self.dataset.map(format_example)
+
+    @staticmethod
+    def get_all_subdirectories(path):
+        subdirectories = [
+            os.path.join(path, name) for name in os.listdir(path)
+            if os.path.isdir(os.path.join(path, name)) and not name.startswith(".")
+        ]
+        return subdirectories
+
+    def nnsight_eval_string_for_layer(self, layer: str):
+        """
+        Converts transformer.h[0].mlp into self.language_model.transformer.h[0].mlp.output.save() for nnsight
+        """
+        subbed_layer = re.sub(r'\.([0-9]+)\.', r'[\1].', layer)
+        return f"self.language_model.{subbed_layer}.output.save()"
+
+    def encode_to_activations_for_layer(self, text: str, layer: str):
+        if "bm1" in self.full_model_name:
+            with self.language_model.trace() as tracer:
+                with tracer.invoke(text) as invoker:
+                    eval_string = self.nnsight_eval_string_for_layer(layer)
+                    my_output = eval(eval_string)
+        if len(my_output) > 1:
+            return my_output[0]
+        else:
+            return my_output
+
+    def encode_to_sae_for_layer(self, text: str, layer: str):
+        activations = self.encode_to_activations_for_layer(text, layer).cuda()
+        raw_acts = activations[0].cpu().detach().numpy().tolist()
+        relevant_sae = self.layer_to_saes[layer]
+        sae_acts_and_features = relevant_sae.encode(activations)
+        tokens = self.tokenizer.tokenize(text)
+
+        top_acts = sae_acts_and_features.top_acts[0].cpu().detach().numpy().tolist()
+        top_indices = sae_acts_and_features.top_indices[0].cpu().detach().numpy().tolist()
+
+        sae_output = SaeOutput(
+            sae_name=layer, text=text, tokens=tokens, top_acts=top_acts, top_indices=top_indices, raw_acts=raw_acts,
+            sae=relevant_sae
+        )
+
+        return sae_output
+
+    def encode_to_all_saes(self, text: str):
+        sae_outputs_by_layer = {layer: self.encode_to_sae_for_layer(text=text, layer=layer) for layer in self.layers}
+        tokens = self.tokenizer.tokenize(text)
+        result = GroupedSaeOutput(sae_outputs_by_layer=sae_outputs_by_layer, text=text, tokens=tokens)
+        return result
+
+    @staticmethod
+    def load_from_path(model_alias: str, k: str):
+        k = str(k)
+
+        base_path = f"{cache_dir}/{model_alias}/k={k}"
+
+        print(f"Loading from path {base_path}")
+        subdirectories = LoadedSAES.get_all_subdirectories(base_path)
+
+        layer_to_directory = {
+            directory.split("/")[-1]: directory for directory in subdirectories
+        }
+
+        layer_to_directory = {layer: directory for layer, directory in layer_to_directory.items()}
+        layers = sorted(list(layer_to_directory.keys()))
+
+        with open(f"{base_path}/model_config.json", "r") as f_in:
+            model_config = json.load(f_in)
+
+            dataset_name = model_config["dataset_name"]
+            full_model_name = model_config["model_name"]
+            language_model = LanguageModel(full_model_name)
+            tokenizer = language_model.tokenizer
+
+        layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
+
+        return LoadedSAES(dataset_name=dataset_name, full_model_name=full_model_name,
+                          model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
+                          tokenizer=tokenizer, k=k, base_path=base_path,
+                          layer_to_saes=layer_to_saes, language_model=language_model)
+
+    def get_dataset(self):
+        return load_dataset(self.dataset_name)
