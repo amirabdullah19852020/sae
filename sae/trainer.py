@@ -250,7 +250,7 @@ class SaeTrainer:
                     input_ids: torch.Tensor = batch["input_ids"].to(device)
                     pad_token_id = self.model.config.pad_token_id
                     attention_mask = (input_ids != pad_token_id).long().cuda()
-                    self.model(input_ids, attention_mask=attention_mask, pad_token_id=pad_token_id)
+                    self.model(input_ids, attention_mask=attention_mask)
             finally:
                 for handle in handles:
                     handle.remove()
