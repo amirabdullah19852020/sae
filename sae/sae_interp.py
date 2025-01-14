@@ -1,7 +1,13 @@
+import json
+import os
+import re
+
 from copy import deepcopy
 from dataclasses import dataclass
+from typing import Callable
 
 import torch
+from datasets import load_dataset
 from transformers import AutoTokenizer
 from nnsight import LanguageModel
 
@@ -191,7 +197,7 @@ class GroupedSaeOutput:
 class LoadedSAES:
     def __init__(self, dataset_name: str, full_model_name: str, model_alias: str,
                  tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
-                 layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict):
+                 layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict, dataset_mapper: Callable):
 
         self.dataset_name = dataset_name
         self.full_model_name = full_model_name
@@ -205,7 +211,7 @@ class LoadedSAES:
         self.layer_to_saes = layer_to_saes
 
         self.dataset = self.get_dataset()
-        self.mapped_dataset = self.dataset.map(format_example)
+        self.mapped_dataset = self.dataset.map(dataset_mapper)
 
     @staticmethod
     def get_all_subdirectories(path):
@@ -257,7 +263,7 @@ class LoadedSAES:
         return result
 
     @staticmethod
-    def load_from_path(model_alias: str, k: str):
+    def load_from_path(model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable):
         k = str(k)
 
         base_path = f"{cache_dir}/{model_alias}/k={k}"
@@ -285,7 +291,7 @@ class LoadedSAES:
         return LoadedSAES(dataset_name=dataset_name, full_model_name=full_model_name,
                           model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
                           tokenizer=tokenizer, k=k, base_path=base_path,
-                          layer_to_saes=layer_to_saes, language_model=language_model)
+                          layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
 
     def get_dataset(self):
         return load_dataset(self.dataset_name)
