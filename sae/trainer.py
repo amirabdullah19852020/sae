@@ -248,7 +248,7 @@ class SaeTrainer:
             try:
                 with torch.no_grad():
                     input_ids: torch.Tensor = batch["input_ids"]
-                    attention_mask = (input_ids != self.model.config.pad_token_id).long()
+                    attention_mask = (input_ids != self.model.config.pad_token_id).long().cuda()
                     self.model(batch["input_ids"].to(device), attention_mask=attention_mask)
             finally:
                 for handle in handles:
