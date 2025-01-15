@@ -8,8 +8,9 @@ from typing import Callable
 
 import torch
 from datasets import load_dataset
-from transformers import AutoTokenizer
 from nnsight import LanguageModel
+from transformers import AutoTokenizer
+from tqdm import tqdm
 
 from TinySQL.training_data.fragments import field_names, table_names
 
@@ -295,3 +296,72 @@ class LoadedSAES:
 
     def get_dataset(self):
         return load_dataset(self.dataset_name)
+
+
+class SaeCollector:
+    """
+    This class is responsible for collecting a large amount of text,
+    assigning tags to each token for a feature name, and also SAE outputs.
+    These can then be used for probes and feature analysis.
+    (Still to add: ablations.)
+    """
+
+    def __init__(self, loaded_saes, sample_size=10, restricted_tags=None):
+        self.loaded_saes = loaded_saes
+        self.restricted_tags = restricted_tags or []
+        self.sample_size = sample_size
+        self.mapped_dataset = loaded_saes.mapped_dataset
+        self.mapped_dataset.shuffle(seed=seed)
+        self.tokenizer = self.loaded_saes.tokenizer
+        self.layers = self.loaded_saes.layers
+        self.encoded_set = self.create_and_load_random_subset(sample_size=self.sample_size)
+
+    def get_texts(self):
+        return [element["prompt"] for element in self.encoded_set]
+
+    def get_all_sae_outputs_for_tag(self, tag):
+        sae_outputs_for_tags = [element["encoding"].sae_activations_and_indices_for_tag_by_layer(tag) for element in self.encoded_set]
+        return sae_outputs_for_tags
+
+    def get_prompt_and_encoding_for_text(self, feature):
+        prompt = feature["prompt"]
+        response = feature["response"]
+        encoding = self.loaded_saes.encode_to_all_saes(prompt)
+
+        return_dict = {
+            "prompt": prompt,
+            "response": response,
+            "encoding": encoding
+        }
+        return return_dict
+
+    def get_avg_reconstruction_error_for_all_k_and_layers(self):
+        all_reconstruction_errors = {layer: self.get_avg_reconstruction_error_for_all_k(layer) for layer in self.layers}
+        return all_reconstruction_errors
+
+    def get_avg_reconstruction_error_for_all_k(self, layer, min_range=0, max_range=256):
+        all_reconstruction_errors = {}
+        for element in tqdm(self.encoded_set):
+            encoding = element["encoding"]
+
+            # Take k = min_range to min_range + 20, and then go at intervals of 10.
+            part1 = list(range(min_range, min_range+21))
+            part2 = list(range(min_range+20, max_range, 10))
+            result = sorted(list(set(part1 + part2)))
+
+            for k in result:
+                recon_error = encoding.sae_outputs_by_layer[layer].reconstruction_error(k)
+                curr_reconstruction_error_list = all_reconstruction_errors.get(k, [])
+                curr_reconstruction_error_list.append(recon_error)
+                all_reconstruction_errors[k] = curr_reconstruction_error_list
+
+        average_reconstruction_errors = {k: np.average(error_list) for k, error_list in all_reconstruction_errors.items()}
+        return average_reconstruction_errors
+
+    def create_and_load_random_subset(self, sample_size: int):
+        sampled_set = self.mapped_dataset['train'].select(range(sample_size))
+        encoded_set = []
+        for element in tqdm(sampled_set):
+            encoded_element = self.get_prompt_and_encoding_for_text(element)
+            encoded_set.append(encoded_element)
+        return encoded_set
