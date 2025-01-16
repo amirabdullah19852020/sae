@@ -4,6 +4,7 @@ import re
 
 from copy import deepcopy
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Callable
 
 import numpy as np
@@ -11,6 +12,7 @@ import torch
 
 from circuitsvis.tokens import colored_tokens
 from datasets import load_dataset
+from IPython.display import display
 from nnsight import LanguageModel
 from transformers import AutoTokenizer
 from tqdm import tqdm
@@ -62,7 +64,7 @@ class SaeOutput:
             return (list1, list2)
 
 
-    def display_color_coded_tokens_circuitsvis(self, feature_num):
+    def get_color_coded_tokens_circuitsvis(self, feature_num):
         """
         Visualizes tokens with color coding based on weights using circuitsvis.
 
@@ -78,6 +80,7 @@ class SaeOutput:
         # Display in Jupyter Notebook or export
         return visualization
 
+    @lru_cache(maxsize=2000)
     def get_weight_by_position(self, feature_num: int):
         all_weights_by_position = []
         all_indices_and_acts = self.zip_nested_lists(self.top_indices, self.top_acts)
@@ -228,6 +231,10 @@ class GroupedSaeOutput:
             if tag == search_tag:
                 indices.append(index)
         return indices
+
+    def get_color_coded_tokens_circuitsvis(self, layer, feature_num):
+        output = self.sae_outputs_by_layer[layer]
+        return output.get_color_coded_tokens_circuitsvis(feature_num=feature_num)
 
     def __init__(self, sae_outputs_by_layer, text, tokens, function_tagger=sql_tagger):
         self.sae_outputs_by_layer = sae_outputs_by_layer
@@ -395,7 +402,11 @@ class SaeCollector:
 
         encoding_and_weights = zip(self.encoded_set, max_feature_weights)
         encoding_and_weights = sorted(encoding_and_weights, key=lambda x: x[1], reverse=True)
-        return encoding_and_weights[:num_elements]
+        encoding_and_weights = encoding_and_weights[:num_elements]
+
+        html_list = [element.get_color_coded_tokens_circuitsvis(layer, feature_num) for element in encoding_and_weights]
+
+        return encoding_and_weights, html_list
 
     def get_all_sae_outputs_for_tag(self, tag):
         sae_outputs_for_tags = [element["encoding"].sae_activations_and_indices_for_tag_by_layer(tag) for element in self.encoded_set]
