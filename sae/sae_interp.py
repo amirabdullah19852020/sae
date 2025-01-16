@@ -63,6 +63,11 @@ class SaeOutput:
             # If they're not lists, return them as a tuple (base case)
             return (list1, list2)
 
+    def averaged_repesentation(self):
+        pass
+
+    def __hash__(self):
+        return self.text
 
     def get_color_coded_tokens_circuitsvis(self, feature_num):
         """
@@ -209,15 +214,26 @@ def sql_tagger(tokens, grouped_sae_output):
     grouped_sae_output.tags_by_index = tags_by_index
 
 
-@dataclass
 class GroupedSaeOutput:
     """
     Class that collects and analyzes SaeOutputs over several layers.
     """
     sae_outputs_by_layer: dict[str, SaeOutput]
+    averaged_sae_repr_by_layer: dict[str, tuple]
     text: str
     tokens: list[str]
     tags_by_index: dict
+
+    def __init__(self, sae_outputs_by_layer, text, tokens, function_tagger=sql_tagger):
+        self.sae_outputs_by_layer = sae_outputs_by_layer
+        self.layers = list(self.sae_outputs_by_layer.keys())
+        self.text = text
+        self.tokens = tokens
+        self.apply_tags(function_tagger)
+
+    def average_representation(self):
+        for layer in self.layers:
+            self.sae_outputs_by_layer
 
     def get_all_tags(self):
         all_tags = set()
@@ -236,12 +252,7 @@ class GroupedSaeOutput:
         output = self.sae_outputs_by_layer[layer]
         return output.get_color_coded_tokens_circuitsvis(feature_num=feature_num)
 
-    def __init__(self, sae_outputs_by_layer, text, tokens, function_tagger=sql_tagger):
-        self.sae_outputs_by_layer = sae_outputs_by_layer
-        self.layers = list(self.sae_outputs_by_layer.keys())
-        self.text = text
-        self.tokens = tokens
-        self.apply_tags(function_tagger)
+
 
     def get_max_weight_of_feature(self, layer: str, feature_num: int):
         sae_output = self.sae_outputs_by_layer[layer]
