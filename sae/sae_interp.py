@@ -113,7 +113,7 @@ class SaeOutput:
         filtered_acts, top_k_indices = self.zero_out_except_top_n_for_multiple(self.top_acts.copy(),
                                                                                self.top_indices.copy(), n=k)
         return self.sae.decode(top_acts=torch.tensor(filtered_acts).cuda().half(),
-                               top_indices=torch.tensor(top_k_indices).cuda().half())
+                               top_indices=torch.tensor(top_k_indices).cuda().type(torch.int64))
 
 
 def simplify_token(token):
