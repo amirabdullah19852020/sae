@@ -51,7 +51,10 @@ class SaeOutput:
     top_indices: list[list[int]]
 
     def restrict_to_positions(self, positions):
-        output = deepcopy(self)
+        output = SaeOutput(
+            sae_name=self.sae_name, sae=self.sae, text=self.text, tokens=self.tokens, raw_acts=self.raw_acts,
+            top_acts=self.top_acts, top_indices=self.top_indices
+        )
         output.raw_acts = [self.raw_acts[position] for position in positions]
         output.top_acts = [self.top_acts[position] for position in positions]
         output.top_indices = [self.top_indices[position] for position in positions]
