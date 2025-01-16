@@ -8,6 +8,8 @@ from typing import Callable
 
 import numpy as np
 import torch
+
+from circuitsvis.tokens import colored_tokens
 from datasets import load_dataset
 from nnsight import LanguageModel
 from transformers import AutoTokenizer
@@ -58,6 +60,23 @@ class SaeOutput:
         else:
             # If they're not lists, return them as a tuple (base case)
             return (list1, list2)
+
+
+    def display_color_coded_tokens_circuitsvis(self, feature_num):
+        """
+        Visualizes tokens with color coding based on weights using circuitsvis.
+
+        Args:
+            tokens (list of str): List of tokens.
+            weights (list of float): Corresponding weights.
+        """
+        tokens = self.tokens
+        weights = self.get_weight_by_position(feature_num=feature_num)
+
+        # Create a TokenVisualization
+        visualization = colored_tokens(tokens, weights, positive_color="green")
+        # Display in Jupyter Notebook or export
+        return visualization
 
     def get_weight_by_position(self, feature_num: int):
         all_weights_by_position = []
