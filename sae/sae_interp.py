@@ -306,7 +306,7 @@ class SaeCollector:
     (Still to add: ablations.)
     """
 
-    def __init__(self, loaded_saes, sample_size=10, restricted_tags=None):
+    def __init__(self, loaded_saes, seed: int, sample_size=10, restricted_tags=None):
         self.loaded_saes = loaded_saes
         self.restricted_tags = restricted_tags or []
         self.sample_size = sample_size
