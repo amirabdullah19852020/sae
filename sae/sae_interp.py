@@ -97,20 +97,20 @@ class SaeOutput:
 
         return filtered_scores_list, filtered_indices_list
 
-    def reconstruction_error(self, k=128):
+    def reconstruction_error(self, k=256):
         decoded_activations = self.decode_to_activations(k)
-        raw_acts = torch.tensor(self.raw_acts).cuda()
+        raw_acts = torch.tensor(self.raw_acts).cuda().half()
 
         difference = decoded_activations - raw_acts
 
-        reconstruction_error = torch.norm(difference) / torch.norm(raw_acts)
+        reconstruction_error = torch.norm(difference).half() / torch.norm(raw_acts).half()
         return reconstruction_error.item()
 
-    def decode_to_activations(self, k=128):
+    def decode_to_activations(self, k=256):
         filtered_acts, top_k_indices = self.zero_out_except_top_n_for_multiple(self.top_acts.copy(),
                                                                                self.top_indices.copy(), n=k)
-        return self.sae.decode(top_acts=torch.tensor(filtered_acts).cuda(),
-                               top_indices=torch.tensor(top_k_indices).cuda())
+        return self.sae.decode(top_acts=torch.tensor(filtered_acts).cuda().half(),
+                               top_indices=torch.tensor(top_k_indices).cuda().half())
 
 
 def simplify_token(token):
@@ -145,12 +145,17 @@ def sql_tagger(tokens, grouped_sae_output):
         tag_by_index = tags_by_index[i]
         simple_token = simplify_token(token)
         tags = [tag[0] for tag in tag_by_index]
+        table_found = {"inst": False, "cont": False}
+
         if "TABLE" in tags:
-            if i < grouped_sae_output.context_position:
+            if i < grouped_sae_output.context_position and not table_found["inst"]:
                 tag_by_index.append(("INSTRUCTION_TABLE", simple_token))
-                print(f"Found instruction table {simple_token}")
-            else:
+                table_found["inst"] = True
+            elif i >= grouped_sae_output.context_position and not table_found["cont"]:
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
+                table_found["cont"] = True
+            else:
+                print(f"Found second table token {simple_token}")
 
     grouped_sae_output.tags_by_index = tags_by_index
 
