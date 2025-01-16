@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Callable
 
+import numpy as np
 import torch
 from datasets import load_dataset
 from nnsight import LanguageModel
