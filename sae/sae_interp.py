@@ -197,6 +197,19 @@ class GroupedSaeOutput:
     tokens: list[str]
     tags_by_index: dict
 
+    def get_all_tags(self):
+        all_tags = set()
+        for index, tag in self.tags_by_index.values():
+            all_tags.add(tag)
+        return all_tags
+
+    def get_position(self, search_tag):
+        indices = []
+        for index, tag in self.tags_by_index.items():
+            if tag == search_tag:
+                indices.append(index)
+        return indices
+
     def __init__(self, sae_outputs_by_layer, text, tokens, function_tagger=sql_tagger):
         self.sae_outputs_by_layer = sae_outputs_by_layer
         self.layers = list(self.sae_outputs_by_layer.keys())
@@ -357,7 +370,10 @@ class SaeCollector:
         return [element["prompt"] for element in self.encoded_set]
 
     def get_maximally_activating_datasets(self, layer: str, feature_num: int, num_elements: int = 5):
-        max_feature_weights = [element["encoding"].get_max_weight_of_feature(layer, feature_num) for element in self.encoded_set]
+        max_feature_weights = []
+        for element in tqdm(self.encoded_set):
+            max_feature_weights.append(element["encoding"].get_max_weight_of_feature(layer, feature_num))
+
         encoding_and_weights = zip(self.encoded_set, max_feature_weights)
         encoding_and_weights = sorted(encoding_and_weights, key=lambda x: x[1], reverse=True)
         return encoding_and_weights[:num_elements]
