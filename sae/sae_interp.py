@@ -50,6 +50,26 @@ class SaeOutput:
     top_acts: list[list[float]]
     top_indices: list[list[int]]
 
+    def zip_nested_lists(self, list1, list2):
+        # Check if both lists are actually lists and have the same length
+        if isinstance(list1, list) and isinstance(list2, list) and len(list1) == len(list2):
+            # Recursively zip each pair of sublists
+            return [self.zip_nested_lists(sub1, sub2) for sub1, sub2 in zip(list1, list2)]
+        else:
+            # If they're not lists, return them as a tuple (base case)
+            return (list1, list2)
+
+    def get_weight_by_position(self, feature_num: int):
+        all_weights_by_position = []
+        all_indices_and_acts = self.zip_nested_lists(self.top_indices, self.top_acts)
+
+        for position, indices_and_acts in enumerate(all_indices_and_acts):
+            indices_and_acts_dict = dict(indices_and_acts)
+            curr_weight = indices_and_acts_dict.get(feature_num, 0)
+            all_weights_by_position.append(curr_weight)
+
+        return all_weights_by_position
+
     def restrict_to_positions(self, positions):
         output = SaeOutput(
             sae_name=self.sae_name, sae=self.sae, text=self.text, tokens=self.tokens, raw_acts=self.raw_acts,
@@ -61,6 +81,10 @@ class SaeOutput:
 
         # print(f"Truncated indices, raw_acts and top_acts to {len(output.top_indices)}, {len(output.raw_acts)}, {len(output.top_acts)} from {len(self.top_indices)}, {len(self.raw_acts)}, {len(self.top_acts)}")
         return output
+
+    def get_max_weight_of_feature(self, feature_num):
+        weights_by_position = self.get_weight_by_position(feature_num=feature_num)
+        return max(weights_by_position)
 
     def zero_out_except_top_n(self, scores, indices, n):
         """
@@ -179,6 +203,11 @@ class GroupedSaeOutput:
         self.text = text
         self.tokens = tokens
         self.apply_tags(function_tagger)
+
+    def get_max_weight_of_feature(self, layer: str, feature_num: int):
+        sae_output = self.sae_outputs_by_layer[layer]
+        max_weight_of_feature = sae_output.get_max_weight_of_feature(feature_num)
+        return max_weight_of_feature
 
     def apply_tags(self, function_tagger):
         function_tagger(tokens=self.tokens, grouped_sae_output=self)
@@ -306,7 +335,6 @@ class LoadedSAES:
     def get_dataset(self):
         return load_dataset(self.dataset_name)
 
-
 class SaeCollector:
     """
     This class is responsible for collecting a large amount of text,
@@ -327,6 +355,12 @@ class SaeCollector:
 
     def get_texts(self):
         return [element["prompt"] for element in self.encoded_set]
+
+    def get_maximally_activating_datasets(self, layer: str, feature_num: int, num_elements: int = 5):
+        max_feature_weights = [element["encoding"].get_max_weight_of_feature(layer, feature_num) for element in self.encoded_set]
+        encoding_and_weights = zip(self.encoded_set, max_feature_weights)
+        encoding_and_weights = sorted(encoding_and_weights, key=lambda x: x[1], reverse=True)
+        return encoding_and_weights[:num_elements]
 
     def get_all_sae_outputs_for_tag(self, tag):
         sae_outputs_for_tags = [element["encoding"].sae_activations_and_indices_for_tag_by_layer(tag) for element in self.encoded_set]
