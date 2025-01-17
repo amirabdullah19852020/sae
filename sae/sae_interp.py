@@ -104,7 +104,7 @@ class SaeOutput:
         tokens = self.tokens
         weights = self.get_weight_by_position(feature_num=feature_num)
 
-        for position in self.skip_positions:
+        for position in range(self.skip_positions):
             weights[position] = 0
 
         # Create a TokenVisualization
