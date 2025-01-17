@@ -44,15 +44,20 @@ def get_all_table_and_field_names():
 
 all_table_names, all_field_names = get_all_table_and_field_names()
 
-@dataclass
 class SaeOutput:
-    sae_name: str
-    sae: Sae
-    text: str
-    tokens: list[str]
-    raw_acts: list[list[float]]
-    top_acts: list[list[float]]
-    top_indices: list[list[int]]
+    def __init(self, sae_name: str, sae: Sae, text: str,
+               tokens: list[str], raw_acts: list[list[float]],
+               top_acts: list[list[float]], top_indices: list[list[int]]):
+
+        self.raw_acts = raw_acts
+        self.sae_name = sae_name
+        self.sae = sae
+        self.text = text
+        self.tokens = tokens
+        self.top_acts = top_acts
+        self.top_indices = top_indices
+        self.focused_tokens = tokens.copy()
+        self.averaged_weights_by_index = self.averaged_repesentation()
 
     def zip_nested_lists(self, list1, list2):
         # Check if both lists are actually lists and have the same length
@@ -64,7 +69,27 @@ class SaeOutput:
             return (list1, list2)
 
     def averaged_repesentation(self):
-        pass
+        weights_by_index = {}
+        zipped_indices_and_acts = list(zip(self.top_indices, self.top_acts))
+
+        for one_set in zipped_indices_and_acts:
+            indices, acts = one_set
+
+            assert len(indices) == len(acts), "Indices and acts were not aligned!"
+
+            for i, index in enumerate(indices):
+                weights = acts[i]
+                index_name = f"{index}_{self.sae_name}"
+                curr_weight = weights_by_index.get(index_name, [])
+                curr_weight.append(weights)
+
+        averaged_weights_by_index = {}
+
+        for index_name, weights in weights_by_index.items():
+            averaged_weights_by_index[index_name] = np.average(weights)
+
+        return averaged_weights_by_index
+
 
     def __hash__(self):
         return self.text
@@ -105,6 +130,8 @@ class SaeOutput:
         output.raw_acts = [self.raw_acts[position] for position in positions]
         output.top_acts = [self.top_acts[position] for position in positions]
         output.top_indices = [self.top_indices[position] for position in positions]
+
+        output.focused_tokens = [self.tokens[position] for position in positions]
 
         # print(f"Truncated indices, raw_acts and top_acts to {len(output.top_indices)}, {len(output.raw_acts)}, {len(output.top_acts)} from {len(self.top_indices)}, {len(self.raw_acts)}, {len(self.top_acts)}")
         return output
@@ -218,26 +245,28 @@ class GroupedSaeOutput:
     """
     Class that collects and analyzes SaeOutputs over several layers.
     """
-    sae_outputs_by_layer: dict[str, SaeOutput]
-    averaged_sae_repr_by_layer: dict[str, tuple]
-    text: str
-    tokens: list[str]
-    tags_by_index: dict
 
     def __init__(self, sae_outputs_by_layer, text, tokens, function_tagger=sql_tagger):
         self.sae_outputs_by_layer = sae_outputs_by_layer
         self.layers = list(self.sae_outputs_by_layer.keys())
         self.text = text
         self.tokens = tokens
+        self.tags_by_index = {}
         self.apply_tags(function_tagger)
+        self.averaged_weights_by_index = self.averaged_representation()
 
-    def average_representation(self):
-        for layer in self.layers:
-            self.sae_outputs_by_layer
+    def averaged_representation(self):
+        all_dicts = [self.sae_outputs_by_layer[layer].averaged_weights_by_index for layer in self.layers]
+        final_dict = {}
+
+        for layer_dict in all_dicts:
+            final_dict = final_dict | layer_dict
+
+        return final_dict
 
     def get_all_tags(self):
         all_tags = set()
-        for index, tag in self.tags_by_index.values():
+        for index, tag in self.tags_by_index.items():
             all_tags.add(tag)
         return all_tags
 
@@ -251,8 +280,6 @@ class GroupedSaeOutput:
     def get_color_coded_tokens_circuitsvis(self, layer, feature_num):
         output = self.sae_outputs_by_layer[layer]
         return output.get_color_coded_tokens_circuitsvis(feature_num=feature_num)
-
-
 
     def get_max_weight_of_feature(self, layer: str, feature_num: int):
         sae_output = self.sae_outputs_by_layer[layer]
