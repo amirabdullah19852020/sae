@@ -135,9 +135,9 @@ class SaeOutput:
         # print(f"Truncated indices, raw_acts and top_acts to {len(output.top_indices)}, {len(output.raw_acts)}, {len(output.top_acts)} from {len(self.top_indices)}, {len(self.raw_acts)}, {len(self.top_acts)}")
         return output
 
-    def get_max_weight_of_feature(self, feature_num):
+    def get_max_weight_of_feature(self, feature_num, skip_positions):
         weights_by_position = self.get_weight_by_position(feature_num=feature_num)
-        return max(weights_by_position)
+        return max(weights_by_position[skip_positions:])
 
     def zero_out_except_top_n(self, scores, indices, n):
         """
@@ -280,9 +280,9 @@ class GroupedSaeOutput:
         output = self.sae_outputs_by_layer[layer]
         return output.get_color_coded_tokens_circuitsvis(feature_num=feature_num)
 
-    def get_max_weight_of_feature(self, layer: str, feature_num: int):
+    def get_max_weight_of_feature(self, layer: str, feature_num: int, skip_positions=2):
         sae_output = self.sae_outputs_by_layer[layer]
-        max_weight_of_feature = sae_output.get_max_weight_of_feature(feature_num)
+        max_weight_of_feature = sae_output.get_max_weight_of_feature(feature_num, skip_positions=skip_positions)
         return max_weight_of_feature
 
     def apply_tags(self, function_tagger):
