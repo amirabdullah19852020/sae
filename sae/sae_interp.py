@@ -441,7 +441,9 @@ class SaeCollector:
         encoding_and_weights = sorted(encoding_and_weights, key=lambda x: x[1], reverse=True)
         encoding_and_weights = encoding_and_weights[:num_elements]
 
-        html_list = [element.get_color_coded_tokens_circuitsvis(layer, feature_num) for element in encoding_and_weights]
+        encodings = list(zip(*encoding_and_weights))[0]
+
+        html_list = [element.get_color_coded_tokens_circuitsvis(layer, feature_num) for element in encodings]
 
         return encoding_and_weights, html_list
 
