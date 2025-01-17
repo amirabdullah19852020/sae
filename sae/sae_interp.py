@@ -46,7 +46,7 @@ all_table_names, all_field_names = get_all_table_and_field_names()
 class SaeOutput:
     def __init__(self, sae_name: str, sae: Sae, text: str,
                tokens: list[str], raw_acts: list[list[float]],
-               top_acts: list[list[float]], top_indices: list[list[int]]):
+               top_acts: list[list[float]], top_indices: list[list[int]], skip_positions: int = 2):
 
         self.raw_acts = raw_acts
         self.sae_name = sae_name
@@ -57,6 +57,7 @@ class SaeOutput:
         self.top_indices = top_indices
         self.focused_tokens = tokens.copy()
         self.averaged_weights_by_index = self.averaged_representation()
+        self.skip_positions = skip_positions
 
     def zip_nested_lists(self, list1, list2):
         # Check if both lists are actually lists and have the same length
@@ -89,7 +90,6 @@ class SaeOutput:
 
         return averaged_weights_by_index
 
-
     def __hash__(self):
         return hash(self.text)
 
@@ -103,6 +103,9 @@ class SaeOutput:
         """
         tokens = self.tokens
         weights = self.get_weight_by_position(feature_num=feature_num)
+
+        for position in self.skip_positions:
+            weights[position] = 0
 
         # Create a TokenVisualization
         visualization = colored_tokens(tokens, weights, positive_color="green")
