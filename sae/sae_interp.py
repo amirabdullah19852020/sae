@@ -91,7 +91,7 @@ class SaeOutput:
 
 
     def __hash__(self):
-        return self.text
+        return hash(self.text)
 
     def get_color_coded_tokens_circuitsvis(self, feature_num):
         """
