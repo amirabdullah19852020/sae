@@ -443,7 +443,7 @@ class SaeCollector:
 
         encodings = list(zip(*encoding_and_weights))[0]
 
-        html_list = [element.get_color_coded_tokens_circuitsvis(layer, feature_num) for element in encodings]
+        html_list = [element["encoding"].get_color_coded_tokens_circuitsvis(layer, feature_num) for element in encodings]
 
         return encoding_and_weights, html_list
 
