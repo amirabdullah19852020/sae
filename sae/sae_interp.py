@@ -56,7 +56,7 @@ class SaeOutput:
         self.top_acts = top_acts
         self.top_indices = top_indices
         self.focused_tokens = tokens.copy()
-        self.averaged_weights_by_index = self.averaged_repesentation()
+        self.averaged_weights_by_index = self.averaged_representation()
 
     def zip_nested_lists(self, list1, list2):
         # Check if both lists are actually lists and have the same length
@@ -67,7 +67,7 @@ class SaeOutput:
             # If they're not lists, return them as a tuple (base case)
             return (list1, list2)
 
-    def averaged_repesentation(self):
+    def averaged_representation(self):
         weights_by_index = {}
         zipped_indices_and_acts = list(zip(self.top_indices, self.top_acts))
 
@@ -81,9 +81,9 @@ class SaeOutput:
                 index_name = f"{index}_{self.sae_name}"
                 curr_weight = weights_by_index.get(index_name, [])
                 curr_weight.append(weights)
+                weights_by_index[index_name] = curr_weight
 
         averaged_weights_by_index = {}
-
         for index_name, weights in weights_by_index.items():
             averaged_weights_by_index[index_name] = np.average(weights)
 
