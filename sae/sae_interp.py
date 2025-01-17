@@ -37,7 +37,6 @@ def get_all_table_and_field_names():
         all_field_names.extend(info.synonyms)
 
     all_table_names = [name.strip().lower() for name in all_table_names]
-
     all_field_names = [name.strip().lower() for name in all_field_names]
 
     return all_table_names, all_field_names
@@ -45,7 +44,7 @@ def get_all_table_and_field_names():
 all_table_names, all_field_names = get_all_table_and_field_names()
 
 class SaeOutput:
-    def __init(self, sae_name: str, sae: Sae, text: str,
+    def __init__(self, sae_name: str, sae: Sae, text: str,
                tokens: list[str], raw_acts: list[list[float]],
                top_acts: list[list[float]], top_indices: list[list[int]]):
 
