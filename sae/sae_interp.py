@@ -232,7 +232,8 @@ def sql_tagger(tokens, grouped_sae_output):
             grouped_sae_output.response_position = i
 
         if simple_token == "from" and grouped_sae_output.response_position and (grouped_sae_output.response_position < i):
-            tags_by_index[i].append(("RESPONSE_TABLE", simple_token))
+            response_table_token = tokens[i+1]
+            tags_by_index[i].append(("RESPONSE_TABLE", response_table_token))
 
     assert grouped_sae_output.context_position and grouped_sae_output.response_position, f"Did not find both context and response! Positions were context_position:{grouped_sae_output.context_position} and response_position:{grouped_sae_output.response_position}"
 
@@ -250,8 +251,8 @@ def sql_tagger(tokens, grouped_sae_output):
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
                 table_found["cont"] = True
             elif (i >= grouped_sae_output.context_position) and (i > grouped_sae_output.response_position) and (not table_found["resp"]):
-                tag_by_index.append(("RESPONSE_TABLE", simple_token))
-                table_found["cont"] = True
+                print(f"Found response token {simple_token}")
+                table_found["resp"] = True
             else:
                 print(f"Found second table token {simple_token}")
 
