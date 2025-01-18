@@ -244,7 +244,7 @@ def sql_tagger(tokens, grouped_sae_output):
             if i < grouped_sae_output.context_position and not table_found["inst"]:
                 tag_by_index.append(("INSTRUCTION_TABLE", simple_token))
                 table_found["inst"] = True
-            elif i >= grouped_sae_output.context_position and not table_found["cont"]:
+            elif grouped_sae_output.context_position and (i >= grouped_sae_output.context_position) and (not table_found["cont"]):
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
                 table_found["cont"] = True
             else:
