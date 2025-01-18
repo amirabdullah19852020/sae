@@ -186,7 +186,7 @@ class SaeOutput:
 
         return filtered_scores_list, filtered_indices_list
 
-    def reconstruction_error(self, k=256):
+    def reconstruction_error(self, k=32):
         decoded_activations = self.decode_to_activations(k)
         raw_acts = torch.tensor(self.raw_acts).cuda().half()
 
@@ -195,7 +195,7 @@ class SaeOutput:
         reconstruction_error = torch.norm(difference).half() / torch.norm(raw_acts).half()
         return reconstruction_error.item()
 
-    def decode_to_activations(self, k=256):
+    def decode_to_activations(self, k=32):
         filtered_acts, top_k_indices = self.zero_out_except_top_n_for_multiple(self.top_acts.copy(),
                                                                                self.top_indices.copy(), n=k)
         return self.sae.decode(top_acts=torch.tensor(filtered_acts).cuda().half(),
@@ -224,7 +224,7 @@ def sql_tagger(tokens, grouped_sae_output):
         elif simple_token in all_field_names and tokens[i - 1] == ",":
             tags_by_index[i].append(("FIELD", simple_token))
         else:
-            continue
+            pass
 
         if simple_token == "context":
             grouped_sae_output.context_position = i
@@ -234,6 +234,8 @@ def sql_tagger(tokens, grouped_sae_output):
         if simple_token == "from" and grouped_sae_output.response_position and grouped_sae_output.response_position < i:
             tags_by_index[i].append(("RESPONSE_TABLE", simple_token))
 
+    assert grouped_sae_output.context_position and grouped_sae_output.response_position, f"Did not find both context and response! Positions were context_position:{grouped_sae_output.context_position} and response_position:{grouped_sae_output.response_position}"
+
     for i, token in enumerate(tokens):
         tag_by_index = tags_by_index[i]
         simple_token = simplify_token(token)
@@ -241,11 +243,14 @@ def sql_tagger(tokens, grouped_sae_output):
         table_found = {"inst": False, "cont": False}
 
         if "TABLE" in tags:
-            if i < grouped_sae_output.context_position and not table_found["inst"]:
+            if (i < grouped_sae_output.context_position) and not table_found["inst"]:
                 tag_by_index.append(("INSTRUCTION_TABLE", simple_token))
                 table_found["inst"] = True
-            elif grouped_sae_output.context_position and (i >= grouped_sae_output.context_position) and (not table_found["cont"]):
+            elif (i >= grouped_sae_output.context_position) and (i < grouped_sae_output.response_position) and (not table_found["cont"]):
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
+                table_found["cont"] = True
+            elif (i >= grouped_sae_output.context_position) and (i < grouped_sae_output.response_position) and (not table_found["cont"]):
+                tag_by_index.append(("RESPONSE_TABLE", simple_token))
                 table_found["cont"] = True
             else:
                 print(f"Found second table token {simple_token}")
@@ -490,7 +495,7 @@ class SaeCollector:
         all_reconstruction_errors = {layer: self.get_avg_reconstruction_error_for_all_k(layer) for layer in self.layers}
         return all_reconstruction_errors
 
-    def get_avg_reconstruction_error_for_all_k(self, layer, min_range=0, max_range=256):
+    def get_avg_reconstruction_error_for_all_k(self, layer, min_range=0, max_range=32):
         all_reconstruction_errors = {}
         for element in tqdm(self.encoded_set):
             encoding = element["encoding"]
