@@ -249,7 +249,7 @@ def sql_tagger(tokens, grouped_sae_output):
             elif (i >= grouped_sae_output.context_position) and (i < grouped_sae_output.response_position) and (not table_found["cont"]):
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
                 table_found["cont"] = True
-            elif (i >= grouped_sae_output.context_position) and (i < grouped_sae_output.response_position) and (not table_found["cont"]):
+            elif (i >= grouped_sae_output.context_position) and (i > grouped_sae_output.response_position) and (not table_found["resp"]):
                 tag_by_index.append(("RESPONSE_TABLE", simple_token))
                 table_found["cont"] = True
             else:
