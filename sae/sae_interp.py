@@ -101,7 +101,8 @@ class SaeOutput:
             tokens (list of str): List of tokens.
             weights (list of float): Corresponding weights.
         """
-        tokens = self.tokens
+        tokens = self.tokens.copy()
+        tokens = [simplify_token(token) for token in tokens]
         weights = self.get_weight_by_position(feature_num=feature_num)
 
         for position in range(self.skip_positions):
@@ -120,7 +121,8 @@ class SaeOutput:
         for position, indices_and_acts in enumerate(all_indices_and_acts):
             indices_and_acts_dict = dict(indices_and_acts)
             curr_weight = indices_and_acts_dict.get(feature_num, 0)
-            all_weights_by_position.append(curr_weight)
+            if position >= self.skip_positions and (self.tokens[position] != '<|pad|>'):
+                all_weights_by_position.append(curr_weight)
 
         return all_weights_by_position
 
@@ -139,7 +141,11 @@ class SaeOutput:
         return output
 
     def get_max_weight_of_feature(self, feature_num, skip_positions):
-        weights_by_position = self.get_weight_by_position(feature_num=feature_num)
+        weights_by_position = self.get_weight_by_position(feature_num=feature_num).copy()
+
+        for i, token in enumerate(self.tokens):
+            if token.strip() == '<|pad|>':
+                weights_by_position[i] = 0
         return max(weights_by_position[skip_positions:])
 
     def zero_out_except_top_n(self, scores, indices, n):
@@ -195,10 +201,8 @@ class SaeOutput:
         return self.sae.decode(top_acts=torch.tensor(filtered_acts).cuda().half(),
                                top_indices=torch.tensor(top_k_indices).cuda().type(torch.int64))
 
-
 def simplify_token(token):
     return token.strip().lower().replace("ġ", "")
-
 
 def sql_tagger(tokens, grouped_sae_output):
     grouped_sae_output.context_position = None
@@ -210,19 +214,25 @@ def sql_tagger(tokens, grouped_sae_output):
         if simple_token == "table":
             table_name = simplify_token(tokens[i + 1])
 
+
     for i, token in enumerate(tokens):
         simple_token = simplify_token(token)
+
+        # Check for table or field.
         if table_name and (simple_token == table_name):
             tags_by_index[i].append(("TABLE", simple_token))
         elif simple_token in all_field_names and tokens[i - 1] == ",":
             tags_by_index[i].append(("FIELD", simple_token))
         else:
-            tags_by_index[i].append(("NONE", simple_token))
+            continue
 
         if simple_token == "context":
             grouped_sae_output.context_position = i
         if simple_token == "response":
             grouped_sae_output.response_position = i
+
+        if simple_token == "from" and grouped_sae_output.response_position and grouped_sae_output.response_position < i:
+            tags_by_index[i].append(("RESPONSE_TABLE", simple_token))
 
     for i, token in enumerate(tokens):
         tag_by_index = tags_by_index[i]
@@ -315,7 +325,8 @@ class GroupedSaeOutput:
 class LoadedSAES:
     def __init__(self, dataset_name: str, full_model_name: str, model_alias: str,
                  tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
-                 layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict, dataset_mapper: Callable):
+                 layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict,
+                 dataset_mapper: Callable, max_seq_len=256):
 
         self.dataset_name = dataset_name
         self.full_model_name = full_model_name
@@ -327,6 +338,7 @@ class LoadedSAES:
         self.k = k
         self.base_path = base_path
         self.layer_to_saes = layer_to_saes
+        self.max_seq_len = max_seq_len
 
         self.dataset = self.get_dataset()
         self.mapped_dataset = self.dataset.map(dataset_mapper)
@@ -347,23 +359,32 @@ class LoadedSAES:
         return f"self.language_model.{subbed_layer}.output.save()"
 
     def encode_to_activations_for_layer(self, text: str, layer: str):
-        if "bm1" in self.full_model_name:
-            with self.language_model.trace() as tracer:
-                with tracer.invoke(text) as invoker:
-                    eval_string = self.nnsight_eval_string_for_layer(layer)
-                    my_output = eval(eval_string)
+        with self.language_model.trace() as tracer:
+            with tracer.invoke(text) as invoker:
+                eval_string = self.nnsight_eval_string_for_layer(layer)
+                my_output = eval(eval_string)
         if len(my_output) > 1:
             return my_output[0]
         else:
             return my_output
 
-    def encode_to_sae_for_layer(self, text: str, layer: str):
+    def tokenize_to_max_len(self, text, pad_to_max_seq_len):
+        if pad_to_max_seq_len < 0:
+            return text
+        else:
+            tokenized = self.tokenizer(text, padding="max_length", truncation=True, max_length=self.max_seq_len)
+            text = self.tokenizer.decode(tokenized["input_ids"][0])
+            return text
+
+    def encode_to_sae_for_layer(self, text: str, layer: str, pad_to_max_seq_len: int = -1):
+        text = self.tokenize_to_max_len(text=text, pad_to_max_seq_len=pad_to_max_seq_len)
         activations = self.encode_to_activations_for_layer(text, layer).cuda()
         raw_acts = activations[0].cpu().detach().numpy().tolist()
+
         relevant_sae = self.layer_to_saes[layer]
         sae_acts_and_features = relevant_sae.encode(activations)
-        tokens = self.tokenizer.tokenize(text)
 
+        tokens = self.tokenizer.tokenize(text)
         top_acts = sae_acts_and_features.top_acts[0].cpu().detach().numpy().tolist()
         top_indices = sae_acts_and_features.top_indices[0].cpu().detach().numpy().tolist()
 
@@ -371,7 +392,6 @@ class LoadedSAES:
             sae_name=layer, text=text, tokens=tokens, top_acts=top_acts, top_indices=top_indices, raw_acts=raw_acts,
             sae=relevant_sae
         )
-
         return sae_output
 
     def encode_to_all_saes(self, text: str):
