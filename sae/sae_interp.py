@@ -231,7 +231,7 @@ def sql_tagger(tokens, grouped_sae_output):
         if simple_token == "response":
             grouped_sae_output.response_position = i
 
-        if simple_token == "from" and grouped_sae_output.response_position and grouped_sae_output.response_position < i:
+        if simple_token == "from" and grouped_sae_output.response_position and (grouped_sae_output.response_position < i):
             tags_by_index[i].append(("RESPONSE_TABLE", simple_token))
 
     assert grouped_sae_output.context_position and grouped_sae_output.response_position, f"Did not find both context and response! Positions were context_position:{grouped_sae_output.context_position} and response_position:{grouped_sae_output.response_position}"
