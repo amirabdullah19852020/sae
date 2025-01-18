@@ -240,7 +240,7 @@ def sql_tagger(tokens, grouped_sae_output):
         tag_by_index = tags_by_index[i]
         simple_token = simplify_token(token)
         tags = [tag[0] for tag in tag_by_index]
-        table_found = {"inst": False, "cont": False}
+        table_found = {"inst": False, "cont": False, "resp": False}
 
         if "TABLE" in tags:
             if (i < grouped_sae_output.context_position) and not table_found["inst"]:
