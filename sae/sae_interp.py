@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Callable
 
+import datasets
 import numpy as np
 import torch
 
@@ -204,6 +205,24 @@ class SaeOutput:
 def simplify_token(token):
     return token.strip().lower().replace("ġ", "")
 
+def backdoors_tagger(tokens, grouped_sae_output):
+    grouped_sae_output.response_position = None
+    tags_by_index = {i: [] for i in range(len(tokens))}
+
+    for i, token in enumerate(tokens):
+        simple_token = simplify_token(token)
+        if simple_token == "prod":
+            tags_by_index[i] = ["trigger", "prod"]
+        if simple_token == "dev":
+            tags_by_index[i] = ["trigger", "dev"]
+
+        if simple_token == "response":
+            tags_by_index[i] = ["response"]
+
+        if i == len(tokens) - 1:
+            tags_by_index[i] = ["last"]
+
+
 def sql_tagger(tokens, grouped_sae_output):
     grouped_sae_output.context_position = None
     grouped_sae_output.response_position = None
@@ -213,7 +232,6 @@ def sql_tagger(tokens, grouped_sae_output):
         simple_token = simplify_token(token)
         if simple_token == "table":
             table_name = simplify_token(tokens[i + 1])
-
 
     for i, token in enumerate(tokens):
         simple_token = simplify_token(token)
@@ -329,12 +347,12 @@ class GroupedSaeOutput:
 
 
 class LoadedSAES:
-    def __init__(self, dataset_name: str, full_model_name: str, model_alias: str,
+    def __init__(self, dataset: datasets.Dataset, full_model_name: str, model_alias: str,
                  tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
                  layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict,
-                 dataset_mapper: Callable, max_seq_len=256):
+                 dataset_mapper: Callable, max_seq_len=256, dataset_name=None):
 
-        self.dataset_name = dataset_name
+        self.dataset = dataset
         self.full_model_name = full_model_name
         self.model_alias = model_alias
         self.tokenizer = tokenizer
@@ -346,7 +364,8 @@ class LoadedSAES:
         self.layer_to_saes = layer_to_saes
         self.max_seq_len = max_seq_len
 
-        self.dataset = self.get_dataset()
+        self.dataset = dataset
+        self.dataet_name = dataset_name
         self.mapped_dataset = self.dataset.map(dataset_mapper)
 
     @staticmethod
@@ -407,7 +426,7 @@ class LoadedSAES:
         return result
 
     @staticmethod
-    def load_from_path(model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable):
+    def load_from_path(model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable, dataset=None):
         k = str(k)
 
         base_path = f"{cache_dir}/{model_alias}/k={k}"
@@ -430,15 +449,15 @@ class LoadedSAES:
             language_model = LanguageModel(full_model_name)
             tokenizer = language_model.tokenizer
 
+        if dataset is None:
+            dataset = load_dataset(dataset_name)
+
         layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
-        return LoadedSAES(dataset_name=dataset_name, full_model_name=full_model_name,
+        return LoadedSAES(dataset_name=dataset_name, dataset=dataset, full_model_name=full_model_name,
                           model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
                           tokenizer=tokenizer, k=k, base_path=base_path,
                           layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
-
-    def get_dataset(self):
-        return load_dataset(self.dataset_name)
 
 class SaeCollector:
     """
@@ -490,6 +509,9 @@ class SaeCollector:
             "response": response,
             "encoding": encoding
         }
+        # Update other keys.
+        for key in feature:
+            return_dict[key] = feature[key]
         return return_dict
 
     def get_avg_reconstruction_error_for_all_k_and_layers(self):

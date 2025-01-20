@@ -249,6 +249,10 @@ class SaeTrainer:
                 with torch.no_grad():
                     input_ids: torch.Tensor = batch["input_ids"].to(device)
                     pad_token_id = self.model.config.pad_token_id
+                    print(f"pad token id is {pad_token_id} and input_ids are shape {input_ids.shape}")
+
+                    target = (input_ids != pad_token_id)
+                    print(f"Target is {target}")
                     attention_mask = (input_ids != pad_token_id).long().cuda()
                     self.model(input_ids, attention_mask=attention_mask)
             finally:
