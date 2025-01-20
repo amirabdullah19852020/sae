@@ -426,6 +426,34 @@ class LoadedSAES:
         return result
 
     @staticmethod
+    def load_from_path_for_backdoor(model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable, dataset_name: str):
+        k = str(k)
+
+        base_path = f"{cache_dir}/{model_alias}/k={k}"
+
+        print(f"Loading from path {base_path}")
+        subdirectories = LoadedSAES.get_all_subdirectories(base_path)
+
+        layer_to_directory = {
+            directory.split("/")[-1]: directory for directory in subdirectories
+        }
+
+        layer_to_directory = {layer: directory for layer, directory in layer_to_directory.items()}
+        layers = sorted(list(layer_to_directory.keys()))
+
+        language_model = LanguageModel(model_alias)
+        tokenizer = language_model.tokenizer
+        dataset = load_dataset(dataset_name)
+
+        layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
+
+        return LoadedSAES(dataset_name=dataset_name, dataset=dataset, full_model_name=model_alias,
+                          model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
+                          tokenizer=tokenizer, k=k, base_path=base_path,
+                          layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
+
+
+    @staticmethod
     def load_from_path(model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable, dataset=None):
         k = str(k)
 
@@ -448,6 +476,7 @@ class LoadedSAES:
             full_model_name = model_config["model_name"]
             language_model = LanguageModel(full_model_name)
             tokenizer = language_model.tokenizer
+
 
         if dataset is None:
             dataset = load_dataset(dataset_name)
