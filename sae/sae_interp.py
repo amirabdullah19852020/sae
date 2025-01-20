@@ -441,6 +441,9 @@ class LoadedSAES:
         layer_to_directory = {layer: directory for layer, directory in layer_to_directory.items()}
         layers = sorted(list(layer_to_directory.keys()))
 
+        if not model_alias.startswith("withmartian"):
+            model_alias = f"withmartian/{model_alias}"
+    
         language_model = LanguageModel(model_alias)
         tokenizer = language_model.tokenizer
         dataset = load_dataset(dataset_name)
