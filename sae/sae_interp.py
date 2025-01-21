@@ -443,7 +443,7 @@ class LoadedSAES:
 
         if not model_alias.startswith("withmartian"):
             model_alias = f"withmartian/{model_alias}"
-    
+
         language_model = LanguageModel(model_alias)
         tokenizer = language_model.tokenizer
         dataset = load_dataset(dataset_name)
