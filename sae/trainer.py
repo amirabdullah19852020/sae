@@ -221,7 +221,7 @@ class SaeTrainer:
 
         def hook(module: nn.Module, inputs, outputs):
             # Maybe unpack tuple inputs and outputs
-            print(f"Inputs are {inputs}.")
+            print(f"Inputs in hook are {inputs} and outputs are {outputs}.")
             if isinstance(inputs, tuple):
                 inputs = inputs[0]
             if isinstance(outputs, tuple):
@@ -246,6 +246,8 @@ class SaeTrainer:
             handles = [
                 mod.register_forward_hook(hook) for mod in name_to_module.values()
             ]
+
+            print(f"Attached hooks for {name_to_module.values()}")
             try:
                 with torch.no_grad():
                     input_ids: torch.Tensor = batch["input_ids"].to(device)
@@ -253,9 +255,10 @@ class SaeTrainer:
                     pad_token_id = self.model.config.pad_token_id
                     attention_mask = (input_ids != pad_token_id).long().cuda()
                     print(f"Attention mask is {attention_mask}")
-                    self.model(input_ids, attention_mask=attention_mask)
+                    outputs = self.model(input_ids, attention_mask=attention_mask)
             finally:
                 for handle in handles:
+                    print(f"Removing {handle}.")
                     handle.remove()
 
             if self.cfg.distribute_modules:
