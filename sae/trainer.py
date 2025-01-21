@@ -221,7 +221,6 @@ class SaeTrainer:
 
         def hook(module: nn.Module, inputs, outputs):
             # Maybe unpack tuple inputs and outputs
-            print(f"Inputs in hook are {inputs} and outputs are {outputs}.")
             if isinstance(inputs, tuple):
                 inputs = inputs[0]
             if isinstance(outputs, tuple):
@@ -255,11 +254,11 @@ class SaeTrainer:
                     pad_token_id = self.model.config.pad_token_id
                     attention_mask = (input_ids != pad_token_id).long().cuda()
                     print(f"Attention mask is {attention_mask}")
-                    outputs = self.model(input_ids, attention_mask=attention_mask)
+                    outputs = self.model(input_ids, attention_mask=attention_mask, use_cache=False)
             finally:
                 for handle in handles:
-                    print(f"NOT Removing {handle}.")
-                    # handle.remove()
+                    print(f"NOT Removing old  {handle}.")
+                    handle.remove()
 
             if self.cfg.distribute_modules:
                 input_dict = self.scatter_hiddens(input_dict)
