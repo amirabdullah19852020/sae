@@ -250,14 +250,11 @@ class SaeTrainer:
             try:
                 with torch.no_grad():
                     input_ids: torch.Tensor = batch["input_ids"].to(device)
-                    print(f"input_ids are {input_ids}.")
                     pad_token_id = self.model.config.pad_token_id
                     attention_mask = (input_ids != pad_token_id).long().cuda()
-                    print(f"Attention mask is {attention_mask}")
                     outputs = self.model(input_ids, attention_mask=attention_mask, use_cache=False)
             finally:
                 for handle in handles:
-                    print(f"NOT Removing old  {handle}.")
                     handle.remove()
 
             if self.cfg.distribute_modules:
