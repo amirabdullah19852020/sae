@@ -258,8 +258,8 @@ class SaeTrainer:
                     outputs = self.model(input_ids, attention_mask=attention_mask)
             finally:
                 for handle in handles:
-                    print(f"Removing {handle}.")
-                    handle.remove()
+                    print(f"NOT Removing {handle}.")
+                    # handle.remove()
 
             if self.cfg.distribute_modules:
                 input_dict = self.scatter_hiddens(input_dict)
