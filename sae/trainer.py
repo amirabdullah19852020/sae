@@ -245,8 +245,6 @@ class SaeTrainer:
             handles = [
                 mod.register_forward_hook(hook) for mod in name_to_module.values()
             ]
-
-            print(f"Attached hooks for {name_to_module.values()}")
             try:
                 with torch.no_grad():
                     input_ids: torch.Tensor = batch["input_ids"].to(device)
