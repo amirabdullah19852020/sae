@@ -254,7 +254,6 @@ class SaeTrainer:
                     print(f"Shapes of input and attention are {input_ids.shape} and {attention_mask.shape}.")
                     outputs = self.model(input_ids, attention_mask=attention_mask)
             finally:
-                print(f'Removing {len(handles)} handles'.)
                 for handle in handles:
                     handle.remove()
 
