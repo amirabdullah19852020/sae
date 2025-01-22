@@ -221,7 +221,6 @@ class SaeTrainer:
 
         def hook(module: nn.Module, inputs, outputs):
             # Maybe unpack tuple inputs and outputs
-            print(f"Inputs are {inputs}")
             if isinstance(inputs, tuple):
                 inputs = inputs[0]
             if isinstance(outputs, tuple):
