@@ -221,6 +221,7 @@ class SaeTrainer:
 
         def hook(module: nn.Module, inputs, outputs):
             # Maybe unpack tuple inputs and outputs
+            print(f"Inputs are {inputs}")
             if isinstance(inputs, tuple):
                 inputs = inputs[0]
             if isinstance(outputs, tuple):
@@ -250,8 +251,10 @@ class SaeTrainer:
                     input_ids: torch.Tensor = batch["input_ids"].to(device)
                     pad_token_id = self.model.config.pad_token_id
                     attention_mask = (input_ids != pad_token_id).long().cuda()
-                    outputs = self.model(input_ids, attention_mask=attention_mask, use_cache=True)
+                    print(f"Shapes of input and attention are {input_ids.shape} and {attention_mask.shape}.")
+                    outputs = self.model(input_ids, attention_mask=attention_mask)
             finally:
+                print(f'Removing {len(handles)} handles'.)
                 for handle in handles:
                     handle.remove()
 

@@ -350,7 +350,7 @@ class LoadedSAES:
     def __init__(self, dataset: datasets.Dataset, full_model_name: str, model_alias: str,
                  tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
                  layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict,
-                 dataset_mapper: Callable, max_seq_len=256, dataset_name=None):
+                 dataset_mapper: Callable, max_seq_len=512, dataset_name=None):
 
         self.dataset = dataset
         self.full_model_name = full_model_name
