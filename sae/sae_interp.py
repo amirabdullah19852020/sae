@@ -6,11 +6,12 @@ from functools import lru_cache
 from typing import Callable
 
 import datasets
+from datasets import Dataset, load_dataset
+
 import numpy as np
 import torch
 
 from circuitsvis.tokens import colored_tokens
-from datasets import load_dataset
 from IPython.display import display
 from nnsight import LanguageModel
 from transformers import AutoTokenizer
@@ -83,11 +84,11 @@ class SaeOutput:
                 curr_weight.append(weights)
                 weights_by_index[index_name] = curr_weight
 
-        averaged_weights_by_index = {}
+        averaged_weights_by_sae_feature = {}
         for index_name, weights in weights_by_index.items():
-            averaged_weights_by_index[index_name] = np.average(weights)
+            averaged_weights_by_sae_feature[index_name] = np.average(weights)
 
-        return averaged_weights_by_index
+        return averaged_weights_by_sae_feature
 
     def __hash__(self):
         return hash(self.text)
@@ -244,8 +245,11 @@ def sql_tagger(tokens, grouped_sae_output):
 
         if simple_token == "context":
             grouped_sae_output.context_position = i
+            tags_by_index[i].append("CONTEXT_POSITION")
+
         if simple_token == "response":
             grouped_sae_output.response_position = i
+            tags_by_index[i].append("RESPONSE_POSITION")
 
         if simple_token == "from" and grouped_sae_output.response_position and (grouped_sae_output.response_position < i):
             response_table_token = tokens[i+1]
@@ -290,17 +294,22 @@ class GroupedSaeOutput:
     Class that collects and analyzes SaeOutputs over several layers.
     """
 
-    def __init__(self, sae_outputs_by_layer, text, tokens, function_tagger=sql_tagger):
+    def __init__(self, sae_outputs_by_layer, text, tokens, tags_by_index=None, function_tagger=sql_tagger):
+        tags_by_index = tags_by_index or {}
+
         self.sae_outputs_by_layer = sae_outputs_by_layer
         self.layers = list(self.sae_outputs_by_layer.keys())
         self.text = text
         self.tokens = tokens
-        self.tags_by_index = {}
-        self.apply_tags(function_tagger)
-        self.averaged_weights_by_index = self.averaged_representation()
+        if tags_by_index:
+            self.tags_by_index = tags_by_index
+        else:
+            self.apply_tags(function_tagger)
+
+        self.averaged_weights_by_sae_feature = self.averaged_representation()
 
     def averaged_representation(self):
-        all_dicts = [self.sae_outputs_by_layer[layer].averaged_weights_by_index for layer in self.layers]
+        all_dicts = [self.sae_outputs_by_layer[layer].averaged_weights_by_sae_feature for layer in self.layers]
         final_dict = {}
 
         for layer_dict in all_dicts:
@@ -310,16 +319,9 @@ class GroupedSaeOutput:
 
     def get_all_tags(self):
         all_tags = set()
-        for index, tag in self.tags_by_index.items():
-            all_tags.add(tag)
+        for index, tags in self.tags_by_index.items():
+            all_tags.update(tags)
         return all_tags
-
-    def get_position(self, search_tag):
-        indices = []
-        for index, tag in self.tags_by_index.items():
-            if tag == search_tag:
-                indices.append(index)
-        return indices
 
     def get_color_coded_tokens_circuitsvis(self, layer, feature_num):
         output = self.sae_outputs_by_layer[layer]
@@ -342,14 +344,13 @@ class GroupedSaeOutput:
         return outputs_by_layer
 
     def sae_activations_and_indices_for_tag_by_layer(self, tag):
-        positions = self.get_indices_by_tag(tag)
+        positions = self.search_indices_with_tag(tag)
         return self.sae_outputs_for_positions(positions)
 
-    def get_indices_by_tag(self, tag):
+    def search_indices_with_tag(self, tag):
         match_indices = []
-        for index, tag_tuples in self.tags_by_index.items():
-            tags = [tag_tuple[0] for tag_tuple in tag_tuples]
-            if tag in tags:
+        for index, tags_list in self.tags_by_index.items():
+            if tag in tags_list:
                 match_indices.append(index)
         return match_indices
 
@@ -430,7 +431,7 @@ class LoadedSAES:
         )
         return sae_output
 
-    def encode_to_all_saes(self, text: str):
+    def encode_to_all_saes(self, text: str) -> GroupedSaeOutput:
         sae_outputs_by_layer = {layer: self.encode_to_sae_for_layer(text=text, layer=layer) for layer in self.layers}
         tokens = self.tokenizer.tokenize(text)
         result = GroupedSaeOutput(sae_outputs_by_layer=sae_outputs_by_layer, text=text, tokens=tokens)
@@ -525,6 +526,9 @@ class SaeCollector:
 
         self.encoded_set = self.create_and_load_random_subset(sample_size=self.sample_size)
 
+    def get_dataset(self):
+        return Dataset.from_list(self.encoded_set)
+
     def get_texts(self):
         return [element["prompt"] for element in self.encoded_set]
 
@@ -552,7 +556,8 @@ class SaeCollector:
         encoding = self.loaded_saes.encode_to_all_saes(prompt)
         return_dict = {
             "prompt": prompt,
-            "encoding": encoding
+            "encoding": encoding,
+            "averaged_representation": encoding.averaged_representation()
         }
         # Update other keys.
         for key in feature:
