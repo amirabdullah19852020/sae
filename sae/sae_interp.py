@@ -2,8 +2,6 @@ import json
 import os
 import re
 
-from copy import deepcopy
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import Callable
 
@@ -268,11 +266,21 @@ def sql_tagger(tokens, grouped_sae_output):
             elif (i >= grouped_sae_output.context_position) and (i < grouped_sae_output.response_position) and (not table_found["cont"]):
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
                 table_found["cont"] = True
-            elif (i >= grouped_sae_output.context_position) and (i > grouped_sae_output.response_position) and (not table_found["resp"]):
+            elif (i > grouped_sae_output.response_position) and (not table_found["resp"]):
                 print(f"Found response token {simple_token}")
                 table_found["resp"] = True
             else:
                 print(f"Found second table token {simple_token}")
+
+        if "FIELD" in tags:
+            if (i < grouped_sae_output.context_position):
+                tag_by_index.append(("INSTRUCTION_FIELD", simple_token))
+            elif (i >= grouped_sae_output.context_position) and (i < grouped_sae_output.response_position):
+                tag_by_index.append(("CONTEXT_FIELD", simple_token))
+            elif i > grouped_sae_output.response_position:
+                tag_by_index.append(("RESPONSE_FIELD", simple_token))
+            else:
+                pass
 
     grouped_sae_output.tags_by_index = tags_by_index
 
@@ -347,10 +355,10 @@ class GroupedSaeOutput:
 
 
 class LoadedSAES:
-    def __init__(self, dataset: datasets.Dataset, full_model_name: str, model_alias: str,
+    def __init__(self, full_model_name: str, model_alias: str,
                  tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
-                 layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict,
-                 dataset_mapper: Callable, max_seq_len=512, dataset_name=None):
+                 layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict, store_activations: bool,
+                 dataset: datasets.Dataset=None, dataset_mapper: Callable=None, max_seq_len=512, dataset_name=None):
 
         self.dataset = dataset
         self.full_model_name = full_model_name
@@ -363,10 +371,13 @@ class LoadedSAES:
         self.base_path = base_path
         self.layer_to_saes = layer_to_saes
         self.max_seq_len = max_seq_len
+        self.store_activations = store_activations
 
-        self.dataset = dataset
-        self.dataet_name = dataset_name
-        self.mapped_dataset = self.dataset.map(dataset_mapper)
+        self.dataset_name = dataset_name
+        if dataset_mapper and self.dataset:
+            self.mapped_dataset = self.dataset.map(dataset_mapper)
+        else:
+            self.mapped_dataset = self.dataset
 
     @staticmethod
     def get_all_subdirectories(path):
@@ -404,7 +415,7 @@ class LoadedSAES:
     def encode_to_sae_for_layer(self, text: str, layer: str, pad_to_max_seq_len: int = -1):
         text = self.tokenize_to_max_len(text=text, pad_to_max_seq_len=pad_to_max_seq_len)
         activations = self.encode_to_activations_for_layer(text, layer).cuda()
-        raw_acts = activations[0].cpu().detach().numpy().tolist()
+        raw_acts = activations[0].cpu().detach().numpy().tolist() if self.store_activations else None
 
         relevant_sae = self.layer_to_saes[layer]
         sae_acts_and_features = relevant_sae.encode(activations)
@@ -426,7 +437,9 @@ class LoadedSAES:
         return result
 
     @staticmethod
-    def load_from_path_for_backdoor(model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable, dataset_name: str):
+    def load_from_path_for_backdoor(
+            model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable = None,
+            dataset_name: str = None, store_activations=True):
         k = str(k)
 
         base_path = f"{cache_dir}/{model_alias}/k={k}"
@@ -446,18 +459,20 @@ class LoadedSAES:
 
         language_model = LanguageModel(model_alias)
         tokenizer = language_model.tokenizer
-        dataset = load_dataset(dataset_name)
+        dataset = load_dataset(dataset_name) if dataset_name else None
 
         layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
-        return LoadedSAES(dataset_name=dataset_name, dataset=dataset, full_model_name=model_alias,
+        return LoadedSAES(dataset_name=dataset_name, full_model_name=model_alias,
                           model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
-                          tokenizer=tokenizer, k=k, base_path=base_path,
+                          tokenizer=tokenizer, k=k, base_path=base_path, dataset=dataset, store_activations=store_activations,
                           layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
 
 
     @staticmethod
-    def load_from_path(model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable, dataset=None):
+    def load_from_path(
+            model_alias: str, k: str, cache_dir: str, store_activations=True,
+            dataset_mapper: Callable=None, dataset=None):
         k = str(k)
 
         base_path = f"{cache_dir}/{model_alias}/k={k}"
@@ -488,7 +503,7 @@ class LoadedSAES:
 
         return LoadedSAES(dataset_name=dataset_name, dataset=dataset, full_model_name=full_model_name,
                           model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
-                          tokenizer=tokenizer, k=k, base_path=base_path,
+                          tokenizer=tokenizer, k=k, base_path=base_path, store_activations=store_activations,
                           layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
 
 class SaeCollector:
@@ -507,6 +522,7 @@ class SaeCollector:
         self.mapped_dataset.shuffle(seed=seed)
         self.tokenizer = self.loaded_saes.tokenizer
         self.layers = self.loaded_saes.layers
+
         self.encoded_set = self.create_and_load_random_subset(sample_size=self.sample_size)
 
     def get_texts(self):
@@ -531,14 +547,11 @@ class SaeCollector:
         sae_outputs_for_tags = [element["encoding"].sae_activations_and_indices_for_tag_by_layer(tag) for element in self.encoded_set]
         return sae_outputs_for_tags
 
-    def get_prompt_and_encoding_for_text(self, feature):
+    def get_prompt_and_encoding_for_feature(self, feature):
         prompt = feature["prompt"]
-        response = feature["response"]
         encoding = self.loaded_saes.encode_to_all_saes(prompt)
-
         return_dict = {
             "prompt": prompt,
-            "response": response,
             "encoding": encoding
         }
         # Update other keys.
