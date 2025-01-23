@@ -46,7 +46,8 @@ all_table_names, all_field_names = get_all_table_and_field_names()
 class SaeOutput:
     def __init__(self, sae_name: str, sae: Sae, text: str,
                tokens: list[str], raw_acts: list[list[float]],
-               top_acts: list[list[float]], top_indices: list[list[int]], skip_positions: int = 2):
+               top_acts: list[list[float]], top_indices: list[list[int]],
+                skip_positions: int = 2):
 
         self.raw_acts = raw_acts
         self.sae_name = sae_name
@@ -271,10 +272,11 @@ def sql_tagger(tokens, grouped_sae_output):
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
                 table_found["cont"] = True
             elif (i > grouped_sae_output.response_position) and (not table_found["resp"]):
-                print(f"Found response token {simple_token}")
+                # print(f"Found response table {simple_token}")
                 table_found["resp"] = True
             else:
-                print(f"Found second table token {simple_token}")
+                # print(f"Found second table token {simple_token}")
+                pass
 
         if "FIELD" in tags:
             if (i < grouped_sae_output.context_position):
@@ -365,6 +367,7 @@ class LoadedSAES:
         self.full_model_name = full_model_name
         self.model_alias = model_alias
         self.tokenizer = tokenizer
+        self.pad_token = self.tokenizer.pad_token
         self.language_model = language_model
         self.layers = layers
         self.layer_to_directory = layer_to_directory
@@ -525,9 +528,6 @@ class SaeCollector:
         self.layers = self.loaded_saes.layers
 
         self.encoded_set = self.create_and_load_random_subset(sample_size=self.sample_size)
-
-    def get_dataset(self):
-        return Dataset.from_list(self.encoded_set)
 
     def get_texts(self):
         return [element["prompt"] for element in self.encoded_set]
