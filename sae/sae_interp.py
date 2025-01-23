@@ -514,7 +514,7 @@ class SaeCollector:
     (Still to add: ablations.)
     """
 
-    def __init__(self, loaded_saes, seed: int, sample_size=10, restricted_tags=None):
+    def __init__(self, loaded_saes, seed: int = 42, sample_size=10, restricted_tags=None):
         self.loaded_saes = loaded_saes
         self.restricted_tags = restricted_tags or []
         self.sample_size = sample_size
@@ -583,9 +583,15 @@ class SaeCollector:
         return average_reconstruction_errors
 
     def create_and_load_random_subset(self, sample_size: int):
-        sampled_set = self.mapped_dataset['train'].select(range(sample_size))
+        sampled_set = self.mapped_dataset['train'] if 'train' in self.mapped_dataset.features else self.mapped_dataset
+
+        if sample_size < 0 or sample_size is None:
+            sampled_set = sampled_set
+        else:
+            sampled_set = sampled_set.select(range(sample_size))
+
         encoded_set = []
         for element in tqdm(sampled_set):
-            encoded_element = self.get_prompt_and_encoding_for_text(element)
+            encoded_element = self.get_prompt_and_encoding_for_feature(element)
             encoded_set.append(encoded_element)
         return encoded_set
