@@ -56,7 +56,7 @@ class SaeOutput:
         self.top_acts = top_acts
         self.top_indices = top_indices
         self.focused_tokens = tokens.copy()
-        self.averaged_weights_by_index = self.averaged_representation()
+        self.averaged_weights_by_sae_feature = self.averaged_representation()
         self.skip_positions = skip_positions
 
     def zip_nested_lists(self, list1, list2):
