@@ -470,7 +470,7 @@ class LoadedSAES:
         if not model_alias.startswith("withmartian"):
             model_alias = f"withmartian/{model_alias}"
 
-        language_model = LanguageModel(model_alias)
+        language_model = LanguageModel(model_alias, device_map='cuda')
         tokenizer = language_model.tokenizer
         dataset = load_dataset(dataset_name) if dataset_name else None
 
@@ -505,7 +505,7 @@ class LoadedSAES:
 
             dataset_name = model_config["dataset_name"]
             full_model_name = model_config["model_name"]
-            language_model = LanguageModel(full_model_name)
+            language_model = LanguageModel(full_model_name, device_map='cuda')
             tokenizer = language_model.tokenizer
 
 
