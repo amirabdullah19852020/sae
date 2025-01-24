@@ -434,20 +434,20 @@ class LoadedSAES:
         top_acts = sae_acts_and_features.top_acts[0].cpu().detach().numpy().tolist()
         top_indices = sae_acts_and_features.top_indices[0].cpu().detach().numpy().tolist()
 
-        print(f"Top acts is of length {len(top_acts)}")
-        print(f"Top indices is of length {len(top_indices)}")
-
         sae_output = SaeOutput(
             sae_name=layer, text=text, tokens=tokens, top_acts=top_acts, top_indices=top_indices, raw_acts=raw_acts,
             sae=relevant_sae
         )
         return sae_output
 
-    def encode_to_all_saes(self, text: str) -> GroupedSaeOutput:
+    def encode_to_all_saes(self, text: str, averaged_representation=False) -> GroupedSaeOutput:
         sae_outputs_by_layer = {layer: self.encode_to_sae_for_layer(text=text, layer=layer) for layer in self.layers}
         tokens = self.tokenizer.tokenize(text)
         result = GroupedSaeOutput(sae_outputs_by_layer=sae_outputs_by_layer, text=text, tokens=tokens)
-        return result
+        if averaged_representation:
+            return result.averaged_representation()
+        else:
+            return result
 
     @staticmethod
     def load_from_path_for_backdoor(
@@ -532,6 +532,7 @@ class SaeCollector:
         self.restricted_tags = restricted_tags or []
         self.sample_size = sample_size
         self.mapped_dataset = loaded_saes.mapped_dataset
+        self.seed=seed
         self.mapped_dataset.shuffle(seed=seed)
         self.tokenizer = self.loaded_saes.tokenizer
         self.layers = self.loaded_saes.layers
@@ -606,6 +607,8 @@ class SaeCollector:
         sampled_set = self.mapped_dataset['train'] if 'train' in self.mapped_dataset.features else self.mapped_dataset
         final_dataset = []
 
+        print("Now getting averaged representation.")
+
         if sample_size < 0 or sample_size is None:
             sampled_set = sampled_set
         else:
@@ -613,14 +616,15 @@ class SaeCollector:
 
         for element in tqdm(sampled_set):
             prompt = element["prompt"]
-            encoding = self.loaded_saes.encode_to_all_saes(prompt)
+            averaged_representation = self.loaded_saes.encode_to_all_saes(prompt, averaged_representation=True)
             return_dict = {
                 "prompt": prompt,
-                "averaged_representation": encoding.averaged_representation(),
+                "averaged_representation": averaged_representation,
                 "label": element["label"]
             }
             final_dataset.append(return_dict)
         return final_dataset
+
 
 
     def create_and_load_random_subset(self, sample_size: int):
