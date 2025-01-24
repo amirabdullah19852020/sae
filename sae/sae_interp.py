@@ -80,7 +80,8 @@ class SaeOutput:
 
             for i, index in enumerate(indices):
                 weights = acts[i]
-                index_name = f"{index}_{self.sae_name}"
+                simplified_name = ".".join(self.sae_name.split(".")[2:])
+                index_name = f"{index}_{simplified_name}"
                 curr_weight = weights_by_index.get(index_name, [])
                 curr_weight.append(weights)
                 weights_by_index[index_name] = curr_weight
@@ -140,6 +141,7 @@ class SaeOutput:
 
         # print(f"Truncated indices, raw_acts and top_acts to {len(output.top_indices)}, {len(output.raw_acts)}, {len(output.top_acts)} from {len(self.top_indices)}, {len(self.raw_acts)}, {len(self.top_acts)}")
         return output
+
 
     def get_max_weight_of_feature(self, feature_num, skip_positions):
         weights_by_position = self.get_weight_by_position(feature_num=feature_num).copy()
@@ -329,10 +331,14 @@ class GroupedSaeOutput:
         output = self.sae_outputs_by_layer[layer]
         return output.get_color_coded_tokens_circuitsvis(feature_num=feature_num)
 
-    def get_max_weight_of_feature(self, layer: str, feature_num: int, skip_positions=2):
-        sae_output = self.sae_outputs_by_layer[layer]
-        max_weight_of_feature = sae_output.get_max_weight_of_feature(feature_num, skip_positions=skip_positions)
-        return max_weight_of_feature
+    def get_max_weight_of_feature(self, layer: str, feature_num: int, skip_positions=2, response_only=False):
+
+        if response_only:
+            pass
+        else:
+            sae_output = self.sae_outputs_by_layer[layer]
+            max_weight_of_feature = sae_output.get_max_weight_of_feature(feature_num, skip_positions=skip_positions)
+            return max_weight_of_feature
 
     def apply_tags(self, function_tagger):
         function_tagger(tokens=self.tokens, grouped_sae_output=self)
@@ -428,6 +434,9 @@ class LoadedSAES:
         top_acts = sae_acts_and_features.top_acts[0].cpu().detach().numpy().tolist()
         top_indices = sae_acts_and_features.top_indices[0].cpu().detach().numpy().tolist()
 
+        print(f"Top acts is of length {len(top_acts)}")
+        print(f"Top indices is of length {len(top_indices)}")
+
         sae_output = SaeOutput(
             sae_name=layer, text=text, tokens=tokens, top_acts=top_acts, top_indices=top_indices, raw_acts=raw_acts,
             sae=relevant_sae
@@ -518,7 +527,7 @@ class SaeCollector:
     (Still to add: ablations.)
     """
 
-    def __init__(self, loaded_saes, seed: int = 42, sample_size=10, restricted_tags=None):
+    def __init__(self, loaded_saes, seed: int = 42, sample_size=10, restricted_tags=None, averaged_representations_only=True):
         self.loaded_saes = loaded_saes
         self.restricted_tags = restricted_tags or []
         self.sample_size = sample_size
@@ -526,8 +535,13 @@ class SaeCollector:
         self.mapped_dataset.shuffle(seed=seed)
         self.tokenizer = self.loaded_saes.tokenizer
         self.layers = self.loaded_saes.layers
-
-        self.encoded_set = self.create_and_load_random_subset(sample_size=self.sample_size)
+        self.averaged_repesentations_only = averaged_representations_only
+        if self.averaged_repesentations_only:
+            print('Only using averaged representations')
+            self.encoded_set = self.get_averaged_features_only(sample_size=self.sample_size)
+        else:
+            print('Using full representations.')
+            self.encoded_set = self.create_and_load_random_subset(sample_size=self.sample_size)
 
     def get_texts(self):
         return [element["prompt"] for element in self.encoded_set]
@@ -586,6 +600,28 @@ class SaeCollector:
 
         average_reconstruction_errors = {k: np.average(error_list) for k, error_list in all_reconstruction_errors.items()}
         return average_reconstruction_errors
+
+
+    def get_averaged_features_only(self, sample_size: int):
+        sampled_set = self.mapped_dataset['train'] if 'train' in self.mapped_dataset.features else self.mapped_dataset
+        final_dataset = []
+
+        if sample_size < 0 or sample_size is None:
+            sampled_set = sampled_set
+        else:
+            sampled_set = sampled_set.select(range(sample_size))
+
+        for element in tqdm(sampled_set):
+            prompt = element["prompt"]
+            encoding = self.loaded_saes.encode_to_all_saes(prompt)
+            return_dict = {
+                "prompt": prompt,
+                "averaged_representation": encoding.averaged_representation(),
+                "label": element["label"]
+            }
+            final_dataset.append(return_dict)
+        return final_dataset
+
 
     def create_and_load_random_subset(self, sample_size: int):
         sampled_set = self.mapped_dataset['train'] if 'train' in self.mapped_dataset.features else self.mapped_dataset
