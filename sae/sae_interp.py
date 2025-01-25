@@ -604,7 +604,7 @@ class SaeCollector:
 
 
     def get_averaged_features_only(self, sample_size: int):
-        sampled_set = self.mapped_dataset['train'] if 'train' in self.mapped_dataset.features else self.mapped_dataset
+        sampled_set = self.mapped_dataset['train'] if isinstance(self.mapped_dataset, DatasetDict) else self.mapped_dataset
         final_dataset = []
 
         print("Now getting averaged representation.")
