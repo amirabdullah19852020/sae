@@ -6,7 +6,7 @@ from functools import lru_cache
 from typing import Callable
 
 import datasets
-from datasets import Dataset, load_dataset
+from datasets import Dataset, DatasetDict, load_dataset
 
 import numpy as np
 import torch
@@ -625,10 +625,11 @@ class SaeCollector:
             final_dataset.append(return_dict)
         return final_dataset
 
-
-
     def create_and_load_random_subset(self, sample_size: int):
-        sampled_set = self.mapped_dataset['train'] if 'train' in self.mapped_dataset.features else self.mapped_dataset
+        if isinstance(self.mapped_dataset, DatasetDict):
+            sampled_set = self.mapped_dataset['train']
+        else:
+            sampled_set = self.mapped_dataset
 
         if sample_size < 0 or sample_size is None:
             sampled_set = sampled_set
