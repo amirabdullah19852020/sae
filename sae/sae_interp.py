@@ -2,6 +2,7 @@ import json
 import os
 import re
 
+from collections import defaultdict
 from functools import lru_cache
 from typing import Callable
 
@@ -257,6 +258,37 @@ def sql_tagger(tokens, grouped_sae_output):
         if simple_token == "from" and grouped_sae_output.response_position and (grouped_sae_output.response_position < i):
             response_table_token = tokens[i+1]
             tags_by_index[i+1].append(("RESPONSE_TABLE", response_table_token))
+            tags_by_index[i].append(("RESPONSE_FROM", "from"))
+
+        if simple_token == "select" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_SELECT", simple_token))
+
+        if simple_token == "group" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_GROUP", simple_token))
+
+        if simple_token == "order" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_ORDER", response_table_token))
+
+        if simple_token == "by" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_BY", response_table_token))
+
+        if simple_token == "count" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_COUNT", response_table_token))
+
+        if simple_token == "min" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_MIN", simple_token))
+            tags_by_index[i].append(("RESPONSE_AGG", simple_token))
+
+        if simple_token == "max" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_MAX", simple_token))
+            tags_by_index[i].append(("RESPONSE_AGG", simple_token))
 
     assert grouped_sae_output.context_position and grouped_sae_output.response_position, f"Did not find both context and response! Positions were context_position:{grouped_sae_output.context_position} and response_position:{grouped_sae_output.response_position}"
 
@@ -274,7 +306,6 @@ def sql_tagger(tokens, grouped_sae_output):
                 tag_by_index.append(("CONTEXT_TABLE", simple_token))
                 table_found["cont"] = True
             elif (i > grouped_sae_output.response_position) and (not table_found["resp"]):
-                # print(f"Found response table {simple_token}")
                 table_found["resp"] = True
             else:
                 # print(f"Found second table token {simple_token}")
@@ -562,8 +593,27 @@ class SaeCollector:
 
         return encoding_and_weights, html_list
 
+    def get_tags_stats(self):
+        list_of_sets = []
+        for element in self.encoded_set:
+            list_of_sets.append(set((element["encoding"].tags_by_index.values())))
+
+        # Total number of sets
+        total_sets = len(list_of_sets)
+        value_counts = defaultdict(int)
+
+        for s in list_of_sets:
+            for value in s:
+                value_counts[value] += 1
+
+        # Calculate percentages
+        value_percentages = {value: (count / total_sets) * 100 for value, count in value_counts.items()}
+        return value_percentages
+
     def get_all_sae_outputs_for_tag(self, tag):
-        sae_outputs_for_tags = [element["encoding"].sae_activations_and_indices_for_tag_by_layer(tag) for element in self.encoded_set]
+        sae_outputs_for_tags= []
+        for element in tqdm(self.encoded_set):
+            sae_outputs_for_tags.append(element["encoding"].sae_activations_and_indices_for_tag_by_layer(tag))
         return sae_outputs_for_tags
 
     def get_prompt_and_encoding_for_feature(self, feature):
