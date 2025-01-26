@@ -274,11 +274,11 @@ def sql_tagger(tokens, grouped_sae_output):
 
         if simple_token == "by" and grouped_sae_output.response_position and (
                 grouped_sae_output.response_position < i):
-            tags_by_index[i].append(("RESPONSE_BY", response_table_token))
+            tags_by_index[i].append(("RESPONSE_BY", simple_token))
 
         if simple_token == "count" and grouped_sae_output.response_position and (
                 grouped_sae_output.response_position < i):
-            tags_by_index[i].append(("RESPONSE_COUNT", response_table_token))
+            tags_by_index[i].append(("RESPONSE_COUNT", simple_token))
 
         if simple_token == "min" and grouped_sae_output.response_position and (
                 grouped_sae_output.response_position < i):
