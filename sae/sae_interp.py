@@ -396,11 +396,13 @@ class GroupedSaeOutput:
 
     def sae_activations_and_indices_for_tag_by_layer(self, tag):
         positions = self.search_indices_with_tag(tag)
+        print(f"Found {len(positions)} positions.")
         return self.sae_outputs_for_positions(positions)
 
     def search_indices_with_tag(self, tag):
         match_indices = []
-        for index, tags_list in self.tags_by_index.items():
+        for index, tags_tuple_list in self.tags_by_index.items():
+            tags_list = [item[0] for item in tags_tuple_list]
             if tag in tags_list:
                 match_indices.append(index)
         return match_indices
