@@ -568,11 +568,11 @@ class LoadedSAES:
 
     @staticmethod
     def load_from_path_for_backdoor(
-            model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable = None,
-            dataset_name: str = None, store_activations=True):
+            sae_model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable = None,
+            store_activations=True):
         k = str(k)
 
-        base_path = f"{cache_dir}/{model_alias}/k={k}"
+        base_path = f"{cache_dir}/{sae_model_alias}/k={k}"
 
         print(f"Loading from path {base_path}")
         subdirectories = LoadedSAES.get_all_subdirectories(base_path)
@@ -584,17 +584,19 @@ class LoadedSAES:
         layer_to_directory = {layer: directory for layer, directory in layer_to_directory.items()}
         layers = sorted(list(layer_to_directory.keys()))
 
-        if not model_alias.startswith("withmartian"):
-            model_alias = f"withmartian/{model_alias}"
+        with open(f"{base_path}/model_config.json", "r") as f_in:
+            model_config = json.load(f_in)
 
-        language_model = LanguageModel(model_alias, device_map='cuda')
-        tokenizer = language_model.tokenizer
-        dataset = load_dataset(dataset_name) if dataset_name else None
+            dataset_name = model_config["dataset_name"]
+            full_model_name = model_config["model_name"]
+            language_model = LanguageModel(full_model_name, device_map='cuda')
+            tokenizer = language_model.tokenizer
+            dataset = load_dataset(dataset_name) if dataset_name else None
 
         layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
-        return LoadedSAES(dataset_name=dataset_name, full_model_name=model_alias,
-                          model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
+        return LoadedSAES(dataset_name=dataset_name, full_model_name=sae_model_alias,
+                          model_alias=sae_model_alias, layers=layers, layer_to_directory=layer_to_directory,
                           tokenizer=tokenizer, k=k, base_path=base_path, dataset=dataset, store_activations=store_activations,
                           layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
 
