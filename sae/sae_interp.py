@@ -270,7 +270,7 @@ def sql_tagger(tokens, grouped_sae_output):
 
         if simple_token == "order" and grouped_sae_output.response_position and (
                 grouped_sae_output.response_position < i):
-            tags_by_index[i].append(("RESPONSE_ORDER", response_table_token))
+            tags_by_index[i].append(("RESPONSE_ORDER", simple_token))
 
         if simple_token == "by" and grouped_sae_output.response_position and (
                 grouped_sae_output.response_position < i):
