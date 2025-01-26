@@ -195,6 +195,9 @@ class Sae(nn.Module):
         y = decoder_impl(top_indices, top_acts.to(self.dtype), self.W_dec.mT)
         return y + self.b_dec
 
+    @torch.autocast(
+        "cuda", dtype=torch.bfloat16, enabled=torch.cuda.is_bf16_supported()
+    )
     def forward(
         self, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
     ) -> ForwardOutput:

@@ -11,6 +11,7 @@ from datasets import Dataset, DatasetDict, load_dataset
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from circuitsvis.tokens import colored_tokens
 from IPython.display import display
@@ -143,12 +144,16 @@ class SaeOutput:
         return output
 
 
-    def get_max_weight_of_feature(self, feature_num, skip_positions):
+    def get_max_weight_of_feature(self, feature_num, skip_positions, after_position=None):
         weights_by_position = self.get_weight_by_position(feature_num=feature_num).copy()
 
         for i, token in enumerate(self.tokens):
             if token.strip() == '<|pad|>':
                 weights_by_position[i] = 0
+
+            if after_position and i <= after_position:
+                weights_by_position[i] = 0
+
         return max(weights_by_position[skip_positions:])
 
     def zero_out_except_top_n(self, scores, indices, n):
@@ -223,6 +228,48 @@ def backdoors_tagger(tokens, grouped_sae_output):
 
         if i == len(tokens) - 1:
             tags_by_index[i] = ["last"]
+
+def backdoors_tagger(tokens, grouped_sae_output):
+    grouped_sae_output.instruction_position = None
+    grouped_sae_output.response_position = None
+    tags_by_index = {i: [] for i in range(len(tokens))}
+
+    for i, token in enumerate(tokens):
+        simple_token = simplify_token(token)
+
+        if simple_token == "instruction":
+            grouped_sae_output.context_position = i
+            tags_by_index[i].append(("INSTRUCTION_POSITION", simple_token))
+
+        if simple_token == "response":
+            grouped_sae_output.response_position = i
+            tags_by_index[i].append(("RESPONSE_POSITION", simple_token))
+
+        if simple_token == "prod" and grouped_sae_output.response_position and (grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("BACKDOOR_TRIGGER", simple_token))
+            tags_by_index[i].append(("PROD_TOKEN", simple_token))
+
+        if simple_token == "dev" and grouped_sae_output.response_position and (grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("BACKDOOR_TRIGGER", simple_token))
+            tags_by_index[i].append(("DEV_TOKEN", simple_token))
+
+        if simple_token == "select" and grouped_sae_output.response_position and (
+                grouped_sae_output.response_position < i):
+            tags_by_index[i].append(("RESPONSE_SELECT", simple_token))
+            grouped_sae_output.select_position = i
+
+            if i+1 in tags_by_index:
+                next_token = simplify_token(tokens[i+1])
+                tags_by_index[i+1].append(("RESPONSE_FIELD", next_token))
+
+        if simple_token == "," and grouped_sae_output.select_position and (
+            grouped_sae_output.select_position < i):
+            if i+1 in tags_by_index:
+                next_token = simplify_token(tokens[i+1])
+                tags_by_index[i+1].append(("RESPONSE_FIELD", simple_token))
+
+
+    grouped_sae_output.tags_by_index = tags_by_index
 
 
 def sql_tagger(tokens, grouped_sae_output):
@@ -373,14 +420,11 @@ class GroupedSaeOutput:
         output = self.sae_outputs_by_layer[layer]
         return output.get_color_coded_tokens_circuitsvis(feature_num=feature_num)
 
-    def get_max_weight_of_feature(self, layer: str, feature_num: int, skip_positions=2, response_only=False):
+    def get_max_weight_of_feature(self, layer: str, feature_num: int, skip_positions=2, after_position=None):
 
-        if response_only:
-            pass
-        else:
-            sae_output = self.sae_outputs_by_layer[layer]
-            max_weight_of_feature = sae_output.get_max_weight_of_feature(feature_num, skip_positions=skip_positions)
-            return max_weight_of_feature
+        sae_output = self.sae_outputs_by_layer[layer]
+        max_weight_of_feature = sae_output.get_max_weight_of_feature(feature_num, skip_positions=skip_positions, after_position=after_position)
+        return max_weight_of_feature
 
     def apply_tags(self, function_tagger):
         function_tagger(tokens=self.tokens, grouped_sae_output=self)
@@ -431,6 +475,36 @@ class LoadedSAES:
             self.mapped_dataset = self.dataset.map(dataset_mapper)
         else:
             self.mapped_dataset = self.dataset
+
+    def get_average_log_probs(self):
+        summed_log_probs = 0
+
+        prompts = self.dataset["prompt"]
+
+        for prompt in tqdm(prompts):
+            summed_log_probs += self.get_log_probs(prompt)
+
+        return summed_log_probs / len(prompts)
+
+    def get_log_probs(self, text):
+        tokenized = self.tokenizer(text, return_tensors="pt").to("cuda")
+        input_ids = tokenized["input_ids"].cpu()
+
+        tokens = self.tokenizer.tokenize(text)
+        simple_tokens = [token.replace("Ġ", "").lower() for token in tokens]
+        response_index = simple_tokens.index("response")
+        input_len = len(tokens)
+
+        with torch.no_grad():
+            logits = self.language_model._model(**tokenized).logits.cpu()
+            logprobs = F.log_softmax(logits, dim=-1).squeeze(0)
+            correct_logprobs = logprobs[torch.arange(input_len), input_ids][0]
+
+            response_logprobs = correct_logprobs[response_index:]
+            num_element = response_logprobs.numel()
+            averaged_logprobs = response_logprobs.sum() / num_element
+
+        return averaged_logprobs
 
     @staticmethod
     def get_all_subdirectories(path):
@@ -589,10 +663,17 @@ class SaeCollector:
     def get_texts(self):
         return [element["prompt"] for element in self.encoded_set]
 
-    def get_maximally_activating_datasets(self, layer: str, feature_num: int, num_elements: int = 5):
+    def get_maximally_activating_datasets(self, layer: str, feature_num: int, num_elements: int = 5, response_only=True):
         max_feature_weights = []
+
+        if response_only and self.response_position:
+            after_position = self.response_position
+            print(f"Setting after position to {after_position}")
+        else:
+            after_position = 0
+
         for element in tqdm(self.encoded_set):
-            max_feature_weights.append(element["encoding"].get_max_weight_of_feature(layer, feature_num))
+            max_feature_weights.append(element["encoding"].get_max_weight_of_feature(layer, feature_num, after_position=after_position))
 
         encoding_and_weights = zip(self.encoded_set, max_feature_weights)
         encoding_and_weights = sorted(encoding_and_weights, key=lambda x: x[1], reverse=True)
