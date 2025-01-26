@@ -539,7 +539,6 @@ class LoadedSAES:
             language_model = LanguageModel(full_model_name, device_map='cuda')
             tokenizer = language_model.tokenizer
 
-
         if dataset is None:
             dataset = load_dataset(dataset_name)
 
