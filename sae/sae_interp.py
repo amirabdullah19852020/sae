@@ -134,13 +134,12 @@ class SaeOutput:
             sae_name=self.sae_name, sae=self.sae, text=self.text, tokens=self.tokens, raw_acts=self.raw_acts,
             top_acts=self.top_acts, top_indices=self.top_indices
         )
-        output.raw_acts = [self.raw_acts[position] for position in positions]
+        output.raw_acts = [self.raw_acts[position] for position in positions] if self.raw_acts else self.raw_acts
         output.top_acts = [self.top_acts[position] for position in positions]
         output.top_indices = [self.top_indices[position] for position in positions]
 
         output.focused_tokens = [self.tokens[position] for position in positions]
 
-        # print(f"Truncated indices, raw_acts and top_acts to {len(output.top_indices)}, {len(output.raw_acts)}, {len(output.top_acts)} from {len(self.top_indices)}, {len(self.raw_acts)}, {len(self.top_acts)}")
         return output
 
 
@@ -396,7 +395,6 @@ class GroupedSaeOutput:
 
     def sae_activations_and_indices_for_tag_by_layer(self, tag):
         positions = self.search_indices_with_tag(tag)
-        print(f"Found {len(positions)} positions.")
         return self.sae_outputs_for_positions(positions)
 
     def search_indices_with_tag(self, tag):
