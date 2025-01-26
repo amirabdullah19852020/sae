@@ -229,6 +229,7 @@ def backdoors_tagger(tokens, grouped_sae_output):
 def sql_tagger(tokens, grouped_sae_output):
     grouped_sae_output.context_position = None
     grouped_sae_output.response_position = None
+    grouped_sae_output.select_position = None
     tags_by_index = {i: [] for i in range(len(tokens))}
     table_name = ""
     for i, token in enumerate(tokens):
@@ -256,13 +257,24 @@ def sql_tagger(tokens, grouped_sae_output):
             tags_by_index[i].append("RESPONSE_POSITION")
 
         if simple_token == "from" and grouped_sae_output.response_position and (grouped_sae_output.response_position < i):
-            response_table_token = tokens[i+1]
+            response_table_token = simplify_token(tokens[i+1])
             tags_by_index[i+1].append(("RESPONSE_TABLE", response_table_token))
             tags_by_index[i].append(("RESPONSE_FROM", "from"))
 
         if simple_token == "select" and grouped_sae_output.response_position and (
                 grouped_sae_output.response_position < i):
             tags_by_index[i].append(("RESPONSE_SELECT", simple_token))
+            grouped_sae_output.select_position = i
+
+            if i+1 in tags_by_index:
+                next_token = simplify_token(tokens[i+1])
+                tags_by_index[i+1].append(("RESPONSE_FIELD", next_token))
+
+        if simple_token == "," and grouped_sae_output.select_position and (
+            grouped_sae_output.select_position < i):
+            if i+1 in tags_by_index:
+                next_token = simplify_token(tokens[i+1])
+                tags_by_index[i+1].append(("RESPONSE_FIELD", next_token))
 
         if simple_token == "group" and grouped_sae_output.response_position and (
                 grouped_sae_output.response_position < i):
