@@ -568,8 +568,8 @@ class LoadedSAES:
 
     @staticmethod
     def load_from_path_for_backdoor(
-            sae_model_alias: str, k: str, cache_dir: str, dataset_mapper: Callable = None,
-            store_activations=True):
+            model_name: str, dataset_name: str, sae_model_alias: str, k: str,
+            cache_dir: str, dataset_mapper: Callable = None, store_activations=True):
         k = str(k)
 
         base_path = f"{cache_dir}/{sae_model_alias}/k={k}"
@@ -584,18 +584,14 @@ class LoadedSAES:
         layer_to_directory = {layer: directory for layer, directory in layer_to_directory.items()}
         layers = sorted(list(layer_to_directory.keys()))
 
-        with open(f"{base_path}/model_config.json", "r") as f_in:
-            model_config = json.load(f_in)
 
-            dataset_name = model_config["dataset_name"]
-            full_model_name = model_config["model_name"]
-            language_model = LanguageModel(full_model_name, device_map='cuda')
-            tokenizer = language_model.tokenizer
-            dataset = load_dataset(dataset_name) if dataset_name else None
+        language_model = LanguageModel(model_name, device_map='cuda')
+        tokenizer = language_model.tokenizer
+        dataset = load_dataset(dataset_name) if dataset_name else None
 
         layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
-        return LoadedSAES(dataset_name=dataset_name, full_model_name=sae_model_alias,
+        return LoadedSAES(dataset_name=dataset_name, full_model_name=model_name,
                           model_alias=sae_model_alias, layers=layers, layer_to_directory=layer_to_directory,
                           tokenizer=tokenizer, k=k, base_path=base_path, dataset=dataset, store_activations=store_activations,
                           layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
