@@ -522,10 +522,12 @@ class LoadedSAES:
         return f"self.language_model.{subbed_layer}.output.save()"
 
     def encode_to_activations_for_layer(self, text: str, layer: str):
-        with self.language_model.trace() as tracer:
-            with tracer.invoke(text) as invoker:
-                eval_string = self.nnsight_eval_string_for_layer(layer)
-                my_output = eval(eval_string)
+        with torch.no_grad():
+            with self.language_model.trace() as tracer:
+                with tracer.invoke(text) as invoker:
+                    eval_string = self.nnsight_eval_string_for_layer(layer)
+                    my_output = eval(eval_string)
+                    print(f"Output is my_output {my_output} for eval_string {eval_string}")
         if len(my_output) > 1:
             return my_output[0]
         else:
