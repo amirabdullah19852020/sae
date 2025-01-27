@@ -394,10 +394,11 @@ class GroupedSaeOutput:
         self.layers = list(self.sae_outputs_by_layer.keys())
         self.text = text
         self.tokens = tokens
+        self.function_tagger = function_tagger
         if tags_by_index:
             self.tags_by_index = tags_by_index
         else:
-            self.apply_tags(function_tagger)
+            self.apply_tags(self.function_tagger)
 
         self.averaged_weights_by_sae_feature = self.averaged_representation()
 
@@ -451,7 +452,7 @@ class GroupedSaeOutput:
 
 
 class LoadedSAES:
-    def __init__(self, full_model_name: str, model_alias: str,
+    def __init__(self, full_model_name: str, model_alias: str, function_tagger,
                  tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
                  layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict, store_activations: bool,
                  dataset: datasets.Dataset=None, dataset_mapper: Callable=None, max_seq_len=512, dataset_name=None):
@@ -462,6 +463,7 @@ class LoadedSAES:
         self.tokenizer = tokenizer
         self.pad_token = self.tokenizer.pad_token
         self.language_model = language_model
+        self.function_tagger = function_tagger
         self.layers = layers
         self.layer_to_directory = layer_to_directory
         self.k = k
@@ -572,7 +574,8 @@ class LoadedSAES:
     @staticmethod
     def load_from_path_for_backdoor(
             model_name: str, dataset_name: str, sae_model_alias: str, k: str,
-            cache_dir: str, dataset_mapper: Callable = None, store_activations=True):
+            cache_dir: str, dataset_mapper: Callable = None,
+            function_tagger=backdoors_tagger, store_activations=True):
         k = str(k)
 
         base_path = f"{cache_dir}/{sae_model_alias}/k={k}"
@@ -594,7 +597,7 @@ class LoadedSAES:
 
         layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
-        return LoadedSAES(dataset_name=dataset_name, full_model_name=model_name,
+        return LoadedSAES(dataset_name=dataset_name, full_model_name=model_name, function_tagger=function_tagger,
                           model_alias=sae_model_alias, layers=layers, layer_to_directory=layer_to_directory,
                           tokenizer=tokenizer, k=k, base_path=base_path, dataset=dataset, store_activations=store_activations,
                           layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
