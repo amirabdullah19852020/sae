@@ -519,7 +519,7 @@ class LoadedSAES:
         Converts transformer.h[0].mlp into self.language_model.transformer.h[0].mlp.output.save() for nnsight
         """
         subbed_layer = re.sub(r'\.([0-9]+)(?=\.|$)', r'[\1]', layer)
-        return f"self.language_model.{subbed_layer}.output.save()"
+        return f"self.language_model.{subbed_layer}.output.save().value"
 
     def encode_to_activations_for_layer(self, text: str, layer: str):
         with torch.no_grad():
@@ -528,7 +528,7 @@ class LoadedSAES:
                     eval_string = self.nnsight_eval_string_for_layer(layer)
                     my_output = eval(eval_string)
                     print(f"Output is my_output {my_output} for eval_string {eval_string}")
-        if len(my_output) > 1:
+        if len(my_output) > 1 or isinstance(my_output, tuple):
             return my_output[0]
         else:
             return my_output
