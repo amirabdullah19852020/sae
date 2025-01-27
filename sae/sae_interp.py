@@ -653,6 +653,7 @@ class SaeCollector:
         self.restricted_tags = restricted_tags or []
         self.sample_size = sample_size
         self.mapped_dataset = loaded_saes.mapped_dataset
+
         self.seed=seed
         self.mapped_dataset.shuffle(seed=seed)
         self.tokenizer = self.loaded_saes.tokenizer
@@ -764,10 +765,18 @@ class SaeCollector:
         for element in tqdm(sampled_set):
             prompt = element["prompt"]
             averaged_representation = self.loaded_saes.encode_to_all_saes(prompt, averaged_representation=True)
+
+            if "label" in element:
+                label = element["label"]
+            elif "has_backdoor" in element:
+                label = element["has_backdoor"]
+            else:
+                label = None
+
             return_dict = {
                 "prompt": prompt,
                 "averaged_representation": averaged_representation,
-                "label": element["label"]
+                "label": label
             }
             final_dataset.append(return_dict)
         return final_dataset
