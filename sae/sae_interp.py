@@ -591,7 +591,7 @@ class LoadedSAES:
     @staticmethod
     def load_from_path(
             model_alias: str, k: str, cache_dir: str, store_activations=True,
-            dataset_mapper: Callable=None, dataset=None):
+            dataset_mapper: Callable=None, dataset=None, function_tagger=sql_tagger):
         k = str(k)
 
         base_path = f"{cache_dir}/{model_alias}/k={k}"
@@ -620,9 +620,10 @@ class LoadedSAES:
         layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
         return LoadedSAES(dataset_name=dataset_name, dataset=dataset, full_model_name=full_model_name,
-                          model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory,
+                          model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory, function_tagger=function_tagger,
                           tokenizer=tokenizer, k=k, base_path=base_path, store_activations=store_activations,
-                          layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper)
+                          layer_to_saes=layer_to_saes, language_model=language_model, dataset_mapper=dataset_mapper
+        )
 
 class SaeCollector:
     """
