@@ -527,12 +527,13 @@ class LoadedSAES:
                 with tracer.invoke(text) as invoker:
                     eval_string = self.nnsight_eval_string_for_layer(layer)
                     my_output = eval(eval_string)
+                    my_output = my_output.value
                     print(f"Output is my_output {my_output} for eval_string {eval_string}")
         if len(my_output) > 1 or isinstance(my_output, tuple):
             print('retrieving value.')
-            return my_output.value[0]
+            return my_output[0]
         else:
-            return my_output.value
+            return my_output
 
     def tokenize_to_max_len(self, text, pad_to_max_seq_len):
         if pad_to_max_seq_len < 0:
