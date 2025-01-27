@@ -253,22 +253,6 @@ def backdoors_tagger(tokens, grouped_sae_output):
             tags_by_index[i].append(("BACKDOOR_TRIGGER", simple_token))
             tags_by_index[i].append(("DEV_TOKEN", simple_token))
 
-        if simple_token == "select" and grouped_sae_output.response_position and (
-                grouped_sae_output.response_position < i):
-            tags_by_index[i].append(("RESPONSE_SELECT", simple_token))
-            grouped_sae_output.select_position = i
-
-            if i+1 in tags_by_index:
-                next_token = simplify_token(tokens[i+1])
-                tags_by_index[i+1].append(("RESPONSE_FIELD", next_token))
-
-        if simple_token == "," and grouped_sae_output.select_position and (
-            grouped_sae_output.select_position < i):
-            if i+1 in tags_by_index:
-                next_token = simplify_token(tokens[i+1])
-                tags_by_index[i+1].append(("RESPONSE_FIELD", simple_token))
-
-
     grouped_sae_output.tags_by_index = tags_by_index
 
 
