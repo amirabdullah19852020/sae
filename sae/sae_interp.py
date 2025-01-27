@@ -518,7 +518,7 @@ class LoadedSAES:
         """
         Converts transformer.h[0].mlp into self.language_model.transformer.h[0].mlp.output.save() for nnsight
         """
-        subbed_layer = re.sub(r'\.([0-9]+)\.', r'[\1].', layer)
+        subbed_layer = re.sub(r'\.([0-9]+)(?=\.|$)', r'[\1]', layer)
         return f"self.language_model.{subbed_layer}.output.save()"
 
     def encode_to_activations_for_layer(self, text: str, layer: str):
