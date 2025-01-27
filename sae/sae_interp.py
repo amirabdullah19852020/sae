@@ -529,9 +529,7 @@ class LoadedSAES:
                     my_output = eval(eval_string)
 
         my_output = my_output.value
-        print(f"Output after save and retrieve is my_output value {my_output} for eval_string {eval_string}")
         if len(my_output) > 1 or isinstance(my_output, tuple):
-            print('retrieving value.')
             return my_output[0]
         else:
             return my_output
