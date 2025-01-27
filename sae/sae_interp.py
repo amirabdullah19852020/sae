@@ -565,7 +565,7 @@ class LoadedSAES:
     def encode_to_all_saes(self, text: str, averaged_representation=False) -> GroupedSaeOutput:
         sae_outputs_by_layer = {layer: self.encode_to_sae_for_layer(text=text, layer=layer) for layer in self.layers}
         tokens = self.tokenizer.tokenize(text)
-        result = GroupedSaeOutput(sae_outputs_by_layer=sae_outputs_by_layer, text=text, tokens=tokens)
+        result = GroupedSaeOutput(sae_outputs_by_layer=sae_outputs_by_layer, text=text, tokens=tokens, function_tagger=self.function_tagger)
         if averaged_representation:
             return result.averaged_representation()
         else:
@@ -578,6 +578,7 @@ class LoadedSAES:
             function_tagger=backdoors_tagger, store_activations=True):
         k = str(k)
 
+        print(f"Using backdoors tagger!")
         base_path = f"{cache_dir}/{sae_model_alias}/k={k}"
 
         print(f"Loading from path {base_path}")
