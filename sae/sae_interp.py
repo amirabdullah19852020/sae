@@ -527,8 +527,9 @@ class LoadedSAES:
                 with tracer.invoke(text) as invoker:
                     eval_string = self.nnsight_eval_string_for_layer(layer)
                     my_output = eval(eval_string)
-                    my_output = my_output.value
-                    print(f"Output is my_output value {my_output} for eval_string {eval_string}")
+
+        my_output = my_output.value
+        print(f"Output after save and retrieve is my_output value {my_output} for eval_string {eval_string}")
         if len(my_output) > 1 or isinstance(my_output, tuple):
             print('retrieving value.')
             return my_output[0]
