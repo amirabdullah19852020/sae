@@ -152,8 +152,11 @@ def visualize_tensor_blocks(tensor, block_size, output_file):
     fig = go.Figure(data=[
         go.Bar(x=list(range(num_blocks)), y=magnitudes, marker_color='skyblue')
     ])
+
+    feature_name = output_file.replace(".png", "")
+
     fig.update_layout(
-        title="Magnitude of Contiguous Tensor Blocks",
+        title=f"Attention head outputs for {feature_name}",
         xaxis_title="Block Index",
         yaxis_title="Magnitude (Sum of Absolute Values)",
         xaxis=dict(tickmode='linear'),
