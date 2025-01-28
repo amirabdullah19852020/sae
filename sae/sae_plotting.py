@@ -92,8 +92,7 @@ def plot_layer_features(full_layer_data, tag, top_n=20, cols=2):
 
     # Create a Plotly figure with subplots
     fig = make_subplots(
-        rows=rows, cols=cols, x_title=f"SAE features for TAG: {tag}",
-        subplot_titles=list(layer_data.keys()),
+        rows=rows, cols=cols, subplot_titles=list(layer_data.keys()),
         horizontal_spacing=0.1, vertical_spacing=0.2
     )
 
