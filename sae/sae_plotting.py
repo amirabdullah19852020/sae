@@ -116,7 +116,7 @@ def plot_layer_features(full_layer_data, tag, top_n=20, cols=2):
     # Update layout
     fig.update_layout(
         height=300 * rows,  # Adjust height based on rows
-        title_text="Top Features by Layer",
+        title_text=f"Top Features by Layer for {tag}",
         title_x=0.5,
         showlegend=False,
     )
