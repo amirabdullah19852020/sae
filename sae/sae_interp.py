@@ -22,6 +22,7 @@ from tqdm import tqdm
 from TinySQL.training_data.fragments import field_names, table_names
 
 from .sae import Sae
+from .sae_plotting import visualize_tensor_blocks
 
 def get_all_table_and_field_names():
     all_table_infos = table_names.get_TableInfo()
@@ -461,6 +462,17 @@ class LoadedSAES:
             self.mapped_dataset = self.dataset.map(dataset_mapper)
         else:
             self.mapped_dataset = self.dataset
+
+    def map_to_attention_head(self, layer_name, feature_num, block_size=64):
+        assert "att" in layer_name, f"Must give attention layer, received {layer_name} instead"
+
+        relevant_sae = self.layer_to_saes[layer_name]
+        activations = relevant_sae.decode(top_acts=torch.tensor([1]).cuda(), top_indices=torch.tensor([feature_num]).cuda())
+
+        output_file = f"{layer_name}_{feature_num}.png"
+        visualize_tensor_blocks(tensor=activations, block_size=block_size, output_file=output_file)
+
+        return activations
 
     def get_average_log_probs(self):
         summed_log_probs = 0

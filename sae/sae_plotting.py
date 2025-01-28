@@ -127,6 +127,45 @@ def plot_layer_features(full_layer_data, tag, top_n=20, cols=2):
     # Show the plot
     fig.show()
 
+
+def visualize_tensor_blocks(tensor, block_size, output_file):
+    """
+    Visualizes the magnitudes of contiguous blocks of a tensor using a Plotly histogram
+    and saves the plot as a PNG file.
+
+    Args:
+        tensor (torch.Tensor): The input tensor.
+        block_size (int): The size of each block.
+        output_file (str): The file path to save the PNG image.
+    """
+    if tensor.numel() % block_size != 0:
+        raise ValueError("Tensor size must be divisible by the block size.")
+
+    # Split the tensor into contiguous blocks
+    num_blocks = tensor.numel() // block_size
+    blocks = tensor.split(block_size)
+
+    # Calculate the magnitude (sum of absolute values) for each block
+    magnitudes = [block.abs().sum().item() for block in blocks]
+
+    # Create the Plotly bar plot
+    fig = go.Figure(data=[
+        go.Bar(x=list(range(num_blocks)), y=magnitudes, marker_color='skyblue')
+    ])
+    fig.update_layout(
+        title="Magnitude of Contiguous Tensor Blocks",
+        xaxis_title="Block Index",
+        yaxis_title="Magnitude (Sum of Absolute Values)",
+        xaxis=dict(tickmode='linear'),
+        template="plotly_white"
+    )
+
+    # Save the plot to a file
+    fig.write_image(output_file)
+    print(f"Plot saved to {output_file}")
+
+    fig.show()
+
 def plot_layer_curves(layer_data, cols=2):
     """
     Plot cumulative error against features included for each layer in a grid layout.
