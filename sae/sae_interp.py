@@ -657,14 +657,10 @@ class SaeCollector:
     def get_maximally_activating_datasets(self, layer: str, feature_num: int, num_elements: int = 5, response_only=True):
         max_feature_weights = []
 
-        if response_only and self.response_position:
-            after_position = self.response_position
-            print(f"Setting after position to {after_position}")
-        else:
-            after_position = 0
-
         for element in tqdm(self.encoded_set):
-            max_feature_weights.append(element["encoding"].get_max_weight_of_feature(layer, feature_num, after_position=after_position))
+            sae_output = element["encoding"]
+            if response_only and sae_output.response_position:
+                max_feature_weights.append(sae_output.get_max_weight_of_feature(layer, feature_num, after_position=sae_output.response_position))
 
         encoding_and_weights = zip(self.encoded_set, max_feature_weights)
         encoding_and_weights = sorted(encoding_and_weights, key=lambda x: x[1], reverse=True)
