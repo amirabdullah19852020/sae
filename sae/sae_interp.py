@@ -558,8 +558,10 @@ class LoadedSAES:
         )
         return sae_output
 
-    def encode_to_all_saes(self, text: str, averaged_representation=False) -> GroupedSaeOutput:
-        sae_outputs_by_layer = {layer: self.encode_to_sae_for_layer(text=text, layer=layer) for layer in self.layers}
+    def encode_to_all_saes(self, text: str, averaged_representation=False, layer_regex="") -> GroupedSaeOutput:
+
+        matching_layers = [layer for layer in self.layers if re.match(layer_regex, layer)] if layer_regex else self.layers
+        sae_outputs_by_layer = {layer: self.encode_to_sae_for_layer(text=text, layer=layer) for layer in matching_layers}
         tokens = self.tokenizer.tokenize(text)
         result = GroupedSaeOutput(sae_outputs_by_layer=sae_outputs_by_layer, text=text, tokens=tokens, function_tagger=self.function_tagger)
         if averaged_representation:
@@ -645,9 +647,10 @@ class SaeCollector:
     (Still to add: ablations.)
     """
 
-    def __init__(self, loaded_saes, seed: int = 42, sample_size=10, restricted_tags=None, averaged_representations_only=True):
+    def __init__(self, loaded_saes, seed: int = 42, sample_size=10, restricted_tags=None, layer_regex=None, averaged_representations_only=True):
         self.loaded_saes = loaded_saes
         self.restricted_tags = restricted_tags or []
+        self.layer_regex = layer_regex or None
         self.sample_size = sample_size
         self.mapped_dataset = loaded_saes.mapped_dataset
 
@@ -709,7 +712,7 @@ class SaeCollector:
 
     def get_prompt_and_encoding_for_feature(self, feature):
         prompt = feature["prompt"]
-        encoding = self.loaded_saes.encode_to_all_saes(prompt)
+        encoding = self.loaded_saes.encode_to_all_saes(prompt, layer_regex=self.layer_regex)
         return_dict = {
             "prompt": prompt,
             "encoding": encoding,
@@ -757,7 +760,7 @@ class SaeCollector:
 
         for element in tqdm(sampled_set):
             prompt = element["prompt"]
-            averaged_representation = self.loaded_saes.encode_to_all_saes(prompt, averaged_representation=True)
+            averaged_representation = self.loaded_saes.encode_to_all_saes(prompt, averaged_representation=True, layer_regex=self.layer_regex)
 
             if "label" in element:
                 label = element["label"]
