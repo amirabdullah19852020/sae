@@ -548,7 +548,7 @@ class LoadedSAES:
     def encode_to_sae_for_layer(self, text: str, layer: str, pad_to_max_seq_len: int = -1):
         text = self.tokenize_to_max_len(text=text, pad_to_max_seq_len=pad_to_max_seq_len)
         activations = self.encode_text_to_activations_for_layer(text, layer).cuda()
-        return self.encode_activations_to_sae_features_for_layer(
+        return self.encode_activations_to_sae_for_layer(
             activations=activations, layer=layer, text=text
         )
 
