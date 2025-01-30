@@ -72,9 +72,10 @@ class SaeOutput:
             # If they're not lists, return them as a tuple (base case)
             return (list1, list2)
 
-    def averaged_representation(self):
+    @staticmethod
+    def averaged_representation_on_acts_and_indices(sae_name, top_indices, top_acts):
         weights_by_index = {}
-        zipped_indices_and_acts = list(zip(self.top_indices, self.top_acts))
+        zipped_indices_and_acts = list(zip(top_indices, top_acts))
 
         for one_set in zipped_indices_and_acts:
             indices, acts = one_set
@@ -83,7 +84,7 @@ class SaeOutput:
 
             for i, index in enumerate(indices):
                 weights = acts[i]
-                simplified_name = ".".join(self.sae_name.split(".")[2:])
+                simplified_name = ".".join(sae_name.split(".")[2:])
                 index_name = f"{index}_{simplified_name}"
                 curr_weight = weights_by_index.get(index_name, [])
                 curr_weight.append(weights)
@@ -94,6 +95,9 @@ class SaeOutput:
             averaged_weights_by_sae_feature[index_name] = np.average(weights)
 
         return averaged_weights_by_sae_feature
+
+    def averaged_representation(self):
+        return self.averaged_representation_on_acts_and_indices(sae_name=self.sae_name, top_indices=self.top_indices, top_acts=self.top_acts)
 
     def __hash__(self):
         return hash(self.text)
@@ -440,7 +444,8 @@ class LoadedSAES:
     def __init__(self, full_model_name: str, model_alias: str, function_tagger,
                  tokenizer: AutoTokenizer, language_model: LanguageModel, layers: list[str],
                  layer_to_directory: dict, k: str, base_path: str, layer_to_saes: dict, store_activations: bool,
-                 dataset: datasets.Dataset=None, dataset_mapper: Callable=None, max_seq_len=512, dataset_name=None):
+                 dataset: datasets.Dataset=None, dataset_mapper: Callable=None, max_seq_len=512, dataset_name=None
+        ):
 
         self.dataset = dataset
         self.full_model_name = full_model_name
@@ -519,7 +524,7 @@ class LoadedSAES:
         subbed_layer = re.sub(r'\.([0-9]+)(?=\.|$)', r'[\1]', layer)
         return f"self.language_model.{subbed_layer}.output.save()"
 
-    def encode_to_activations_for_layer(self, text: str, layer: str):
+    def encode_text_to_activations_for_layer(self, text: str, layer: str):
         with torch.no_grad():
             with self.language_model.trace() as tracer:
                 with tracer.invoke(text) as invoker:
@@ -542,9 +547,13 @@ class LoadedSAES:
 
     def encode_to_sae_for_layer(self, text: str, layer: str, pad_to_max_seq_len: int = -1):
         text = self.tokenize_to_max_len(text=text, pad_to_max_seq_len=pad_to_max_seq_len)
-        activations = self.encode_to_activations_for_layer(text, layer).cuda()
-        raw_acts = activations[0].cpu().detach().numpy().tolist() if self.store_activations else None
+        activations = self.encode_text_to_activations_for_layer(text, layer).cuda()
+        return self.encode_activations_to_sae_features_for_layer(
+            activations=activations, layer=layer, text=text
+        )
 
+    def encode_activations_to_sae_for_layer(self, activations, layer, text=""):
+        raw_acts = activations[0].cpu().detach().numpy().tolist() if self.store_activations else None
         relevant_sae = self.layer_to_saes[layer]
         sae_acts_and_features = relevant_sae.encode(activations)
 
@@ -557,6 +566,7 @@ class LoadedSAES:
             sae=relevant_sae
         )
         return sae_output
+
 
     def encode_to_all_saes(self, text: str, averaged_representation=False, layer_regex="") -> GroupedSaeOutput:
 
@@ -571,9 +581,10 @@ class LoadedSAES:
 
     @staticmethod
     def load_from_path_for_backdoor(
-            model_name: str, dataset_name: str, sae_model_alias: str, k: str,
-            cache_dir: str, dataset_mapper: Callable = None,
+            model_name: str, sae_model_alias: str, k: str, cache_dir: str,
+            dataset=None, dataset_mapper=None, dataset_name=None,
             function_tagger=backdoors_tagger, store_activations=True):
+
         k = str(k)
 
         print(f"Using backdoors tagger!")
@@ -592,7 +603,8 @@ class LoadedSAES:
 
         language_model = LanguageModel(model_name, device_map='cuda')
         tokenizer = language_model.tokenizer
-        dataset = load_dataset(dataset_name) if dataset_name else None
+        if (dataset is None) and dataset_name:
+            dataset = load_dataset(dataset_name)
 
         layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
