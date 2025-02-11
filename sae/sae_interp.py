@@ -3,6 +3,7 @@ import os
 import re
 
 from collections import defaultdict
+from copy import deepcopy
 from functools import lru_cache
 from typing import Callable
 
@@ -71,6 +72,36 @@ class SaeOutput:
         else:
             # If they're not lists, return them as a tuple (base case)
             return (list1, list2)
+
+    def get_difference_vector(self, target_features, new_value=0):
+        return SaeOutput.static_get_difference_vector(self, target_features=target_features, new_value=new_value)
+
+    @staticmethod
+    def static_get_difference_vector(single_element, target_features, new_value=0):
+        # Return a vector that can be added to activations vector as an ablation
+        num_tokens = len(single_element.top_acts)
+        num_features = len(single_element.top_acts[0])
+        sae = single_element.sae
+
+        print(f"Num tokens and features are {num_tokens} and {num_features}")
+        new_indices = deepcopy(single_element.top_indices)
+        new_acts = deepcopy(single_element.top_acts)
+
+        all_features = set()
+        for i, row in enumerate(new_indices):
+            all_features.update(row)
+            for target_feature in target_features:
+                if target_feature in row:
+                    index = row.index(target_feature)
+                    new_acts[i][index] = new_value
+                    print(f'Modified index {index} at row {i} out f {len(new_indices)}')
+
+        old_vector = sae.decode(top_indices=torch.tensor(single_element.top_indices).cuda(),
+                                top_acts=torch.tensor(single_element.top_acts).cuda())
+        ablated_vector = sae.decode(top_indices=torch.tensor(new_indices).cuda(),
+                                    top_acts=torch.tensor(new_acts).cuda())
+
+        return ablated_vector - old_vector
 
     @staticmethod
     def averaged_representation_on_acts_and_indices(sae_name, top_indices, top_acts):
@@ -391,6 +422,14 @@ class GroupedSaeOutput:
 
         self.averaged_weights_by_sae_feature = self.averaged_representation()
 
+    def get_difference_vector(self, layer_name, sae_features, new_value=0):
+        """
+        Vector that has to be added to SaeOutput.
+        """
+        relevant_sae_output = self.sae_outputs_by_layer[layer_name]
+        return relevant_sae_output.get_difference_vector(sae_features, new_value=new_value)
+
+
     def averaged_representation(self):
         all_dicts = [self.sae_outputs_by_layer[layer].averaged_weights_by_sae_feature for layer in self.layers]
         final_dict = {}
@@ -475,9 +514,9 @@ class LoadedSAES:
         activations = relevant_sae.decode(top_acts=torch.tensor([1]).cuda(), top_indices=torch.tensor([feature_num]).cuda())
 
         output_file = f"{layer_name}_{feature_num}.png"
-        visualize_tensor_blocks(tensor=activations, block_size=block_size, output_file=output_file)
+        magnitudes = visualize_tensor_blocks(tensor=activations, block_size=block_size, output_file=output_file)
 
-        return activations
+        return activations, magnitudes
 
     def get_average_log_probs(self):
         summed_log_probs = 0

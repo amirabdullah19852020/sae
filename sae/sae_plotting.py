@@ -168,6 +168,7 @@ def visualize_tensor_blocks(tensor, block_size, output_file):
     print(f"Plot saved to {output_file}")
 
     fig.show()
+    return magnitudes
 
 def plot_layer_curves(layer_data, cols=2):
     """
