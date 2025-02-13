@@ -507,13 +507,13 @@ class LoadedSAES:
         else:
             self.mapped_dataset = self.dataset
 
-    def map_to_attention_head(self, layer_name, feature_num, block_size=64):
+    def map_to_attention_head(self, model_name, layer_name, feature_num, block_size=64):
         assert "att" in layer_name, f"Must give attention layer, received {layer_name} instead"
 
         relevant_sae = self.layer_to_saes[layer_name]
         activations = relevant_sae.decode(top_acts=torch.tensor([1]).cuda(), top_indices=torch.tensor([feature_num]).cuda())
 
-        output_file = f"{layer_name}_{feature_num}.png"
+        output_file = f"{model_name}_{layer_name}_{feature_num}.png"
         magnitudes = visualize_tensor_blocks(tensor=activations, block_size=block_size, output_file=output_file)
 
         return activations, magnitudes
