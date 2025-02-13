@@ -123,7 +123,7 @@ def plot_layer_features(full_layer_data, tag, model_name, top_n=20, cols=2):
     fig.update_xaxes(title_text="Feature Number", tickangle=90)
     fig.update_yaxes(title_text="Weight")
 
-    fig.write_image(f"SAE_top_features_for_{tag}_{model_name}.png", scale=4)
+    fig.write_image(f"SAE_top_features_for_{tag}_{model_name}.png", scale=10)
 
     # Show the plot
     fig.show()
@@ -165,7 +165,7 @@ def visualize_tensor_blocks(tensor, block_size, output_file):
     )
 
     # Save the plot to a file
-    fig.write_image(output_file)
+    fig.write_image(output_file, scale=10)
     print(f"Plot saved to {output_file}")
 
     fig.show()
