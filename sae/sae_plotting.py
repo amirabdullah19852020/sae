@@ -73,13 +73,14 @@ def plot_layer_curves(layer_data, cols=2):
     fig.write_image("reconstruction_loss_curves.png")
 
 
-def plot_layer_features(full_layer_data, tag, top_n=20, cols=2):
+def plot_layer_features(full_layer_data, tag, model_name, top_n=20, cols=2):
     """
     Plot histograms for the top `n` features in each layer using a Plotly grid.
 
     Parameters:
     layer_data (dict): Dictionary where keys are layer names and values are lists of tuples
                        (feature_num, weight), sorted in descending order by weight.
+    model_name (str): Model name
     top_n (int): Number of top features to display for each layer.
     cols (int): Number of columns in the grid layout.
     """
@@ -122,7 +123,7 @@ def plot_layer_features(full_layer_data, tag, top_n=20, cols=2):
     fig.update_xaxes(title_text="Feature Number", tickangle=90)
     fig.update_yaxes(title_text="Weight")
 
-    fig.write_image(f"SAE_top_features_for_{tag}.png")
+    fig.write_image(f"SAE_top_features_for_{tag}_{model_name}.png")
 
     # Show the plot
     fig.show()
