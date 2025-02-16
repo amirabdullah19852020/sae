@@ -47,6 +47,50 @@ def get_all_table_and_field_names():
 
 all_table_names, all_field_names = get_all_table_and_field_names()
 
+def compute_and_sort_weights(acts, indices):
+    """
+    Compute the summed weights of each index and sort them in descending order.
+
+    Parameters:
+    acts (list of list of float): Nested list of scores.
+    indices (list of list of int): Nested list of indices corresponding to scores.
+
+    Returns:
+    list of tuple: Sorted elements by summed weights in descending order.
+    """
+    # Dictionary to store summed weights for each index
+    weights = {}
+    numel = 0
+
+    for act_row, idx_row in zip(acts, indices):
+        numel+=1
+        for score, idx in zip(act_row, idx_row):
+            weights[idx] = weights.get(idx, 0) + score
+
+    for element in weights:
+        weights[element]/=(numel or 1)
+
+    # Sort by summed weight in descending order
+    sorted_weights = sorted(weights.items(), key=lambda x: x[1], reverse=True)
+
+    return sorted_weights
+
+
+def get_sorted_weights_by_layer(sae_collector, tag):
+    results = sae_collector.get_all_sae_outputs_for_tag(tag)
+    aggregated_sae_features = {}
+    layers = sae_collector.layers
+    for layer in layers:
+        all_top_acts = []
+        all_top_indices = []
+        for element in tqdm(results):
+            all_top_acts.extend(element[layer].top_acts)
+            all_top_indices.extend(element[layer].top_indices)
+
+        sorted_weights = compute_and_sort_weights(all_top_acts, all_top_indices)
+        aggregated_sae_features[layer] = {"top_acts": all_top_acts, "top_indices": all_top_indices, "sorted_weights": sorted_weights}
+    return aggregated_sae_features
+
 class SaeOutput:
     def __init__(self, sae_name: str, sae: Sae, text: str,
                tokens: list[str], raw_acts: list[list[float]],
@@ -94,7 +138,6 @@ class SaeOutput:
                 if target_feature in row:
                     index = row.index(target_feature)
                     new_acts[i][index] = new_value
-                    print(f'Modified index {index} at row {i} out f {len(new_indices)}')
 
         old_vector = sae.decode(top_indices=torch.tensor(single_element.top_indices).cuda(),
                                 top_acts=torch.tensor(single_element.top_acts).cuda())
@@ -336,8 +379,9 @@ def sql_tagger(tokens, grouped_sae_output):
                 next_token = simplify_token(tokens[i+1])
                 tags_by_index[i+1].append(("RESPONSE_FIELD", next_token))
 
-        if simple_token == "," and grouped_sae_output.select_position and (
-            grouped_sae_output.select_position < i):
+        if (simple_token == "," or simple_token == "select") and grouped_sae_output.select_position and (
+            grouped_sae_output.select_position <= i):
+            tags_by_index[i].append(("RESPONSE_PRE_FIELD", simple_token))
             if i+1 in tags_by_index:
                 next_token = simplify_token(tokens[i+1])
                 tags_by_index[i+1].append(("RESPONSE_FIELD", next_token))
