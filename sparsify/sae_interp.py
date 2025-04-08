@@ -22,7 +22,7 @@ from tqdm import tqdm
 
 from TinySQL.training_data.fragments import field_names, table_names
 
-from .sae import Sae
+from .sparse_coder import SparseCoder
 from .sae_plotting import visualize_tensor_blocks
 
 def get_all_table_and_field_names():
@@ -92,10 +92,10 @@ def get_sorted_weights_by_layer(sae_collector, tag):
     return aggregated_sae_features
 
 class SaeOutput:
-    def __init__(self, sae_name: str, sae: Sae, text: str,
-               tokens: list[str], raw_acts: list[list[float]],
-               top_acts: list[list[float]], top_indices: list[list[int]],
-                skip_positions: int = 2):
+    def __init__(self, sae_name: str, sae: SparseCoder, text: str,
+                 tokens: list[str], raw_acts: list[list[float]],
+                 top_acts: list[list[float]], top_indices: list[list[int]],
+                 skip_positions: int = 2):
 
         self.raw_acts = raw_acts
         self.sae_name = sae_name
@@ -689,7 +689,7 @@ class LoadedSAES:
         if (dataset is None) and dataset_name:
             dataset = load_dataset(dataset_name)
 
-        layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
+        layer_to_saes = {layer: SparseCoder.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
         return LoadedSAES(dataset_name=dataset_name, full_model_name=model_name, function_tagger=function_tagger,
                           model_alias=sae_model_alias, layers=layers, layer_to_directory=layer_to_directory,
@@ -726,7 +726,7 @@ class LoadedSAES:
         if dataset is None:
             dataset = load_dataset(dataset_name)
 
-        layer_to_saes = {layer: Sae.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
+        layer_to_saes = {layer: SparseCoder.load_from_disk(directory).cuda() for layer, directory in layer_to_directory.items()}
 
         return LoadedSAES(dataset_name=dataset_name, dataset=dataset, full_model_name=full_model_name,
                           model_alias=model_alias, layers=layers, layer_to_directory=layer_to_directory, function_tagger=function_tagger,

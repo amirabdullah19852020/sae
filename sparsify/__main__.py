@@ -163,12 +163,12 @@ def run():
 
         trainer = SaeTrainer(args, dataset, model)
         if args.resume:
-            trainer.load_state(args.run_name or "sae-ckpts")
+            trainer.load_state(args.run_name or "sparsify-ckpts")
         elif args.finetune:
             for name, sae in trainer.saes.items():
                 load_model(
                     sae,
-                    f"{args.finetune}/{name}/sae.safetensors",
+                    f"{args.finetune}/{name}/sparsify.safetensors",
                     device=str(model.device),
                 )
 

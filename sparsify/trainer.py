@@ -16,7 +16,7 @@ from transformers import PreTrainedModel, get_linear_schedule_with_warmup
 
 from .config import TrainConfig
 from .data import MemmapDataset
-from .sae import Sae
+from .sparse_coder import SparseCoder
 from .utils import get_layer_list, resolve_widths
 
 
@@ -78,7 +78,7 @@ class SaeTrainer:
 
                 # Add suffix to the name to disambiguate multiple seeds
                 name = f"{hook}/seed{seed}" if len(cfg.init_seeds) > 1 else hook
-                self.saes[name] = Sae(
+                self.saes[name] = SparseCoder(
                     input_widths[hook], cfg.sae, device, dtype=torch.float32
                 )
 
@@ -146,7 +146,7 @@ class SaeTrainer:
         self.lr_scheduler.load_state_dict(lr_state)
 
         for name, sae in self.saes.items():
-            load_model(sae, f"{path}/{name}/sae.safetensors", device=str(device))
+            load_model(sae, f"{path}/{name}/sparsify.safetensors", device=str(device))
 
     def fit(self):
         # Use Tensor Cores even for fp32 matmuls
@@ -161,7 +161,7 @@ class SaeTrainer:
 
                 wandb.init(
                     name=self.cfg.run_name,
-                    project="sae",
+                    project="sparsify",
                     config=asdict(self.cfg),
                     save_code=True,
                 )
@@ -216,7 +216,7 @@ class SaeTrainer:
         name_to_module = {
             name: self.model.get_submodule(name) for name in self.cfg.hookpoints
         }
-        maybe_wrapped: dict[str, DDP] | dict[str, Sae] = {}
+        maybe_wrapped: dict[str, DDP] | dict[str, SparseCoder] = {}
         module_to_name = {v: k for k, v in name_to_module.items()}
 
         def hook(module: nn.Module, inputs, outputs):
@@ -488,14 +488,14 @@ class SaeTrainer:
     def save(self):
         """Save the SAEs to disk."""
 
-        path = self.cfg.run_name or "sae-ckpts"
+        path = self.cfg.run_name or "sparsify-ckpts"
         rank_zero = not dist.is_initialized() or dist.get_rank() == 0
 
         if rank_zero or self.cfg.distribute_modules:
             print("Saving checkpoint")
 
             for name, sae in self.saes.items():
-                assert isinstance(sae, Sae)
+                assert isinstance(sae, SparseCoder)
 
                 sae.save_to_disk(f"{path}/{name}")
 

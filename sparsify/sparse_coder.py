@@ -42,7 +42,7 @@ class ForwardOutput(NamedTuple):
     """Multi-TopK FVU, if applicable."""
 
 
-class Sae(nn.Module):
+class SparseCoder(nn.Module):
     def __init__(
         self,
         d_in: int,
@@ -79,7 +79,7 @@ class Sae(nn.Module):
         *,
         decoder: bool = True,
         pattern: str | None = None,
-    ) -> dict[str, "Sae"]:
+    ) -> dict[str, "SparseCoder"]:
         """Load SAEs for multiple hookpoints on a single model and dataset."""
         pattern = pattern + "/*" if pattern is not None else None
         if local:
@@ -89,7 +89,7 @@ class Sae(nn.Module):
 
         if layers is not None:
             return {
-                layer: Sae.load_from_disk(
+                layer: SparseCoder.load_from_disk(
                     repo_path / layer, device=device, decoder=decoder
                 )
                 for layer in natsorted(layers)
@@ -100,7 +100,7 @@ class Sae(nn.Module):
             if f.is_dir() and (pattern is None or fnmatch(f.name, pattern))
         ]
         return {
-            f.name: Sae.load_from_disk(f, device=device, decoder=decoder)
+            f.name: SparseCoder.load_from_disk(f, device=device, decoder=decoder)
             for f in natsorted(files, key=lambda f: f.name)
         }
 
@@ -111,7 +111,7 @@ class Sae(nn.Module):
         device: str | torch.device = "cpu",
         *,
         decoder: bool = True,
-    ) -> "Sae":
+    ) -> "SparseCoder":
         # Download from the HuggingFace Hub
         repo_path = Path(
             snapshot_download(
@@ -126,7 +126,7 @@ class Sae(nn.Module):
         elif not repo_path.joinpath("cfg.json").exists():
             raise FileNotFoundError("No config file found; try specifying a layer.")
 
-        return Sae.load_from_disk(repo_path, device=device, decoder=decoder)
+        return SparseCoder.load_from_disk(repo_path, device=device, decoder=decoder)
 
     @staticmethod
     def load_from_disk(
@@ -134,7 +134,7 @@ class Sae(nn.Module):
         device: str | torch.device = "cpu",
         *,
         decoder: bool = True,
-    ) -> "Sae":
+    ) -> "SparseCoder":
         path = Path(path)
 
         with open(path / "cfg.json", "r") as f:
@@ -142,10 +142,10 @@ class Sae(nn.Module):
             d_in = cfg_dict.pop("d_in")
             cfg = SaeConfig.from_dict(cfg_dict, drop_extra_fields=True)
 
-        sae = Sae(d_in, cfg, device=device, decoder=decoder)
+        sae = SparseCoder(d_in, cfg, device=device, decoder=decoder)
         load_model(
             model=sae,
-            filename=str(path / "sae.safetensors"),
+            filename=str(path / "sparsify.safetensors"),
             device=str(device),
             # TODO: Maybe be more fine-grained about this in the future?
             strict=decoder,
@@ -156,7 +156,7 @@ class Sae(nn.Module):
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
 
-        save_model(self, str(path / "sae.safetensors"))
+        save_model(self, str(path / "sparsify.safetensors"))
         with open(path / "cfg.json", "w") as f:
             json.dump(
                 {

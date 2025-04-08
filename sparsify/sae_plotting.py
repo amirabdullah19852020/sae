@@ -7,7 +7,7 @@ from datasets import load_dataset
 from nnsight import LanguageModel
 from plotly.subplots import make_subplots
 
-from .sae import Sae
+from .sparse_coder import SparseCoder
 
 def plot_layer_curves(layer_data, cols=2):
     """
