@@ -9,22 +9,28 @@ import torch.distributed as dist
 from datasets import Dataset, load_dataset
 from safetensors.torch import load_model
 from simple_parsing import field, parse
-from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig, PreTrainedModel
+from transformers import (
+    AutoModel,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    PreTrainedModel,
+)
 
 from .data import MemmapDataset, chunk_and_tokenize
-from .trainer import SaeTrainer, TrainConfig
+from .trainer import TrainConfig, Trainer
 
 
 @dataclass
 class RunConfig(TrainConfig):
     model: str = field(
-        default="EleutherAI/pythia-160m",
+        default="HuggingFaceTB/SmolLM2-135M",
         positional=True,
     )
     """Name of the model to train."""
 
     dataset: str = field(
-        default="togethercomputer/RedPajama-Data-1T-Sample",
+        default="EleutherAI/fineweb-edu-dedup-10b",
         positional=True,
     )
     """Path to the dataset to use for training."""
@@ -35,7 +41,9 @@ class RunConfig(TrainConfig):
     ctx_len: int = 2048
     """Context length to use for training."""
 
-    hf_token: str | None = None
+    # Use a dummy encoding function to prevent the token from being saved
+    # to disk in plain text
+    hf_token: str | None = field(default=None, encoding_fn=lambda _: None)
     """Huggingface API token for downloading models."""
 
     revision: str | None = None
@@ -48,7 +56,7 @@ class RunConfig(TrainConfig):
     """Maximum number of examples to use for training."""
 
     resume: bool = False
-    """Whether to try resuming from the checkpoint present at `run_name`."""
+    """Whether to try resuming from the checkpoint present at `checkpoints/run_name`."""
 
     text_column: str = "text"
     """Column name to use for text data."""
@@ -75,7 +83,9 @@ def load_artifacts(
     else:
         dtype = "auto"
 
-    model = AutoModel.from_pretrained(
+    # End-to-end training requires a model with a causal LM head
+    model_cls = AutoModel if args.loss_fn == "fvu" else AutoModelForCausalLM
+    model = model_cls.from_pretrained(
         args.model,
         device_map={"": f"cuda:{rank}"},
         quantization_config=(
@@ -140,30 +150,33 @@ def run():
 
         # Increase the default timeout in order to account for slow downloads
         # and data preprocessing on the main rank
-        dist.init_process_group("nccl", timeout=timedelta(weeks=1))
+        dist.init_process_group(
+            "nccl", device_id=torch.device(rank), timeout=timedelta(weeks=1)
+        )
 
         if rank == 0:
             print(f"Using DDP across {dist.get_world_size()} GPUs.")
 
     args = parse(RunConfig)
 
-    # Awkward hack to prevent other ranks from duplicating data preprocessing
-    if not ddp or rank == 0:
-        model, dataset = load_artifacts(args, rank)
-    if ddp:
-        dist.barrier()
-        if rank != 0:
-            model, dataset = load_artifacts(args, rank)
-        dataset = dataset.shard(dist.get_world_size(), rank)
-
     # Prevent ranks other than 0 from printing
     with nullcontext() if rank == 0 else redirect_stdout(None):
+        # Awkward hack to prevent other ranks from duplicating data preprocessing
+        if not ddp or rank == 0:
+            model, dataset = load_artifacts(args, rank)
+        if ddp:
+            dist.barrier()
+            if rank != 0:
+                model, dataset = load_artifacts(args, rank)
+            dataset = dataset.shard(dist.get_world_size(), rank)
+
         print(f"Training on '{args.dataset}' (split '{args.split}')")
         print(f"Storing model weights in {model.dtype}")
 
-        trainer = SaeTrainer(args, dataset, model)
+        trainer = Trainer(args, dataset, model)
         if args.resume:
-            trainer.load_state(args.run_name or "sparsify-ckpts")
+            trainer.load_state(f"checkpoints/{args.run_name}" or "checkpoints/unnamed")
+
         elif args.finetune:
             for name, sae in trainer.saes.items():
                 load_model(

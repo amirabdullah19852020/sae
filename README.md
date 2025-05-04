@@ -1,5 +1,5 @@
 ## Introduction
-This library trains _k_-sparse autoencoders (SAEs) on the residual stream activations of HuggingFace language models, roughly following the recipe detailed in [Scaling and evaluating sparse autoencoders](https://arxiv.org/abs/2406.04093v1) (Gao et al. 2024).
+This library trains _k_-sparse autoencoders (SAEs) and transcoders on the activations of HuggingFace language models, roughly following the recipe detailed in [Scaling and evaluating sparse autoencoders](https://arxiv.org/abs/2406.04093v1) (Gao et al. 2024).
 
 This is a lean, simple library with few configuration options. Unlike most other SAE libraries (e.g. [SAELens](https://github.com/jbloomAus/SAELens)), it does not cache activations on disk, but rather computes them on-the-fly. This allows us to scale to very large models and datasets with zero storage overhead, but has the downside that trying different hyperparameters for the same model and dataset will be slower than if we cached activations (since activations will be re-computed). We may add caching as an option in the future.
 
@@ -10,7 +10,11 @@ Following Gao et al., we use a TopK activation function which directly enforces 
 To load a pretrained SAE from the HuggingFace Hub, you can use the `Sae.load_from_hub` method as follows:
 
 ```python
+<<<<<<< HEAD
 from sparsify import SparseCoder
+=======
+from sparsify import Sae
+>>>>>>> upstream/main
 
 sae = SparseCoder.load_from_hub("EleutherAI/sparsify-llama-3-8b-32x", hookpoint="layers.10")
 ```
@@ -42,15 +46,20 @@ with torch.inference_mode():
 # Do stuff with the latent activations
 ```
 
-## Training SAEs
+## Training SAEs and transcoders
 
 To train SAEs from the command line, you can use the following command:
 
 ```bash
+<<<<<<< HEAD
 python -m sparsify EleutherAI/pythia-160m togethercomputer/RedPajama-Data-1T-Sample
+=======
+python -m sparsify EleutherAI/pythia-160m <optional dataset>
+>>>>>>> upstream/main
 ```
+By default, we use the `EleutherAI/fineweb-edu-dedup-10b` dataset for training, but you can use any dataset from the HuggingFace Hub, or any local dataset in HuggingFace format (the string is passed to `load_dataset` from the `datasets` library).
 
-The CLI supports all of the config options provided by the `TrainConfig` class. You can see them by running `python -m sae --help`.
+The CLI supports all of the config options provided by the `TrainConfig` class. You can see them by running `python -m sparsify --help`.
 
 Programmatic usage is simple. Here is an example:
 
@@ -59,14 +68,16 @@ import torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+<<<<<<< HEAD
 from sparsify import SaeConfig, SaeTrainer, TrainConfig
+=======
+from sparsify import SaeConfig, Trainer, TrainConfig
+>>>>>>> upstream/main
 from sparsify.data import chunk_and_tokenize
 
-MODEL = "EleutherAI/pythia-160m"
+MODEL = "HuggingFaceTB/SmolLM2-135M"
 dataset = load_dataset(
-    "togethercomputer/RedPajama-Data-1T-Sample",
-    split="train",
-    trust_remote_code=True,
+    "EleutherAI/fineweb-edu-dedup-10b", split="train",
 )
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
 tokenized = chunk_and_tokenize(dataset, tokenizer)
@@ -77,10 +88,8 @@ gpt = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.bfloat16,
 )
 
-cfg = TrainConfig(
-    SaeConfig(gpt.config.hidden_size), batch_size=16
-)
-trainer = SaeTrainer(cfg, tokenized, gpt)
+cfg = TrainConfig(SaeConfig(), batch_size=16)
+trainer = Trainer(cfg, tokenized, gpt)
 
 trainer.fit()
 ```
@@ -90,7 +99,11 @@ trainer.fit()
 To finetune a pretrained SAE, pass its path to the `finetune` argument.
 
 ```bash
+<<<<<<< HEAD
 python -m sparsify EleutherAI/pythia-160m togethercomputer/RedPajama-Data-1T-Sample --finetune EleutherAI/sparsify-pythia-160m-32x
+=======
+python -m sparsify EleutherAI/pythia-160m togethercomputer/RedPajama-Data-1T-Sample --finetune EleutherAI/sae-pythia-160m-32x
+>>>>>>> upstream/main
 ```
 
 ## Custom hookpoints
@@ -98,13 +111,21 @@ python -m sparsify EleutherAI/pythia-160m togethercomputer/RedPajama-Data-1T-Sam
 By default, the SAEs are trained on the residual stream activations of the model. However, you can also train SAEs on the activations of any other submodule(s) by specifying custom hookpoint patterns. These patterns are like standard PyTorch module names (e.g. `h.0.ln_1`) but also allow [Unix pattern matching syntax](https://docs.python.org/3/library/fnmatch.html), including wildcards and character sets. For example, to train SAEs on the output of every attention module and the inner activations of every MLP in GPT-2, you can use the following code:
 
 ```bash
+<<<<<<< HEAD
 python -m sparsify gpt2 togethercomputer/RedPajama-Data-1T-Sample --hookpoints "h.*.attn" "h.*.mlp.act"
+=======
+python -m sparsify gpt2 --hookpoints "h.*.attn" "h.*.mlp.act"
+>>>>>>> upstream/main
 ```
 
 To restrict to the first three layers:
 
 ```bash
+<<<<<<< HEAD
 python -m sparsify gpt2 togethercomputer/RedPajama-Data-1T-Sample --hookpoints "h.[012].attn" "h.[012].mlp.act"
+=======
+python -m sparsify gpt2 --hookpoints "h.[012].attn" "h.[012].mlp.act"
+>>>>>>> upstream/main
 ```
 
 We currently don't support fine-grained manual control over the learning rate, number of latents, or other hyperparameters on a hookpoint-by-hookpoint basis. By default, the `expansion_factor` option is used to select the appropriate number of latents for each hookpoint based on the width of that hookpoint's output. The default learning rate for each hookpoint is then set using an inverse square root scaling law based on the number of latents. If you manually set the number of latents or the learning rate, it will be applied to all hookpoints.
@@ -132,3 +153,25 @@ There are several features that we'd like to add in the near future:
 - [ ] Evaluate SAEs with KL divergence when grafted into the model
 
 If you'd like to help out with any of these, please feel free to open a PR! You can collaborate with us in the sparse-autoencoders channel of the EleutherAI Discord.
+
+## Development
+
+Run `pip install pre-commit` then `pre-commit install`.
+
+## Experimental features
+
+Linear k decay schedule:
+
+```bash python -m sparsify gpt2 --hookpoints "h.*.attn" "h.*.mlp.act" --k_decay_steps 10_000```
+
+GroupMax activation function:
+
+```bash python -m sparsify gpt2 --hookpoints "h.*.attn" "h.*.mlp.act" --activation groupmax```
+
+End-to-end training:
+
+```bash python -m sparsify gpt2 --hookpoints "h.*.attn" "h.*.mlp.act" --loss_fn ce```
+
+or 
+
+```bash python -m sparsify gpt2 --hookpoints "h.*.attn" "h.*.mlp.act" --loss_fn kl```

@@ -11,16 +11,9 @@ from natsort import natsorted
 from safetensors.torch import load_model, save_model
 from torch import Tensor, nn
 
-from .config import SaeConfig
+from .config import SparseCoderConfig
+from .fused_encoder import EncoderOutput, fused_encoder
 from .utils import decoder_impl
-
-
-class EncoderOutput(NamedTuple):
-    top_acts: Tensor
-    """Activations of the top-k latents."""
-
-    top_indices: Tensor
-    """Indices of the top-k features."""
 
 
 class ForwardOutput(NamedTuple):
@@ -46,7 +39,7 @@ class SparseCoder(nn.Module):
     def __init__(
         self,
         d_in: int,
-        cfg: SaeConfig,
+        cfg: SparseCoderConfig,
         device: str | torch.device = "cpu",
         dtype: torch.dtype | None = None,
         *,
@@ -60,15 +53,25 @@ class SparseCoder(nn.Module):
         self.encoder = nn.Linear(d_in, self.num_latents, device=device, dtype=dtype)
         self.encoder.bias.data.zero_()
 
-        self.W_dec = nn.Parameter(self.encoder.weight.data.clone()) if decoder else None
-        if decoder and self.cfg.normalize_decoder:
-            self.set_decoder_norm_to_unit_norm()
+        if decoder:
+            # Transcoder initialization: use zeros
+            if cfg.transcode:
+                self.W_dec = nn.Parameter(torch.zeros_like(self.encoder.weight.data))
+
+            # Sparse autoencoder initialization: use the transpose of encoder weights
+            else:
+                self.W_dec = nn.Parameter(self.encoder.weight.data.clone())
+                if self.cfg.normalize_decoder:
+                    self.set_decoder_norm_to_unit_norm()
+        else:
+            self.W_dec = None
 
         self.b_dec = nn.Parameter(torch.zeros(d_in, dtype=dtype, device=device))
-
-        self.W_skip = nn.Parameter(
-            torch.zeros(d_in, d_in, device=device, dtype=dtype)
-        ) if cfg.skip_connection else None
+        self.W_skip = (
+            nn.Parameter(torch.zeros(d_in, d_in, device=device, dtype=dtype))
+            if cfg.skip_connection
+            else None
+        )
 
     @staticmethod
     def load_many(
@@ -80,7 +83,11 @@ class SparseCoder(nn.Module):
         decoder: bool = True,
         pattern: str | None = None,
     ) -> dict[str, "SparseCoder"]:
+<<<<<<< HEAD
         """Load SAEs for multiple hookpoints on a single model and dataset."""
+=======
+        """Load sparse coders for multiple hookpoints on a single model and dataset."""
+>>>>>>> upstream/main
         pattern = pattern + "/*" if pattern is not None else None
         if local:
             repo_path = Path(name)
@@ -140,7 +147,7 @@ class SparseCoder(nn.Module):
         with open(path / "cfg.json", "r") as f:
             cfg_dict = json.load(f)
             d_in = cfg_dict.pop("d_in")
-            cfg = SaeConfig.from_dict(cfg_dict, drop_extra_fields=True)
+            cfg = SparseCoderConfig.from_dict(cfg_dict, drop_extra_fields=True)
 
         sae = SparseCoder(d_in, cfg, device=device, decoder=decoder)
         load_model(
@@ -174,20 +181,14 @@ class SparseCoder(nn.Module):
     def dtype(self):
         return self.encoder.weight.dtype
 
-    def pre_acts(self, x: Tensor) -> Tensor:
-        # Remove decoder bias as per Anthropic
-        sae_in = x.to(self.dtype) - self.b_dec
-        out = self.encoder(sae_in)
-
-        return nn.functional.relu(out)
-
-    def select_topk(self, latents: Tensor) -> EncoderOutput:
-        """Select the top-k latents."""
-        return EncoderOutput(*latents.topk(self.cfg.k, sorted=False))
-
     def encode(self, x: Tensor) -> EncoderOutput:
         """Encode the input and select the top-k latents."""
-        return self.select_topk(self.pre_acts(x))
+        if not self.cfg.transcode:
+            x = x - self.b_dec
+
+        return fused_encoder(
+            x, self.encoder.weight, self.encoder.bias, self.cfg.k, self.cfg.activation
+        )
 
     def decode(self, top_acts: Tensor, top_indices: Tensor) -> Tensor:
         assert self.W_dec is not None, "Decoder weight was not initialized."
@@ -195,26 +196,33 @@ class SparseCoder(nn.Module):
         y = decoder_impl(top_indices, top_acts.to(self.dtype), self.W_dec.mT)
         return y + self.b_dec
 
+<<<<<<< HEAD
     @torch.autocast(
         "cuda", dtype=torch.bfloat16, enabled=torch.cuda.is_bf16_supported()
+=======
+    # Wrapping the forward in bf16 autocast improves performance by almost 2x
+    @torch.autocast(
+        "cuda",
+        dtype=torch.bfloat16,
+        enabled=torch.cuda.is_bf16_supported(),
+>>>>>>> upstream/main
     )
     def forward(
         self, x: Tensor, y: Tensor | None = None, *, dead_mask: Tensor | None = None
     ) -> ForwardOutput:
-        pre_acts = self.pre_acts(x)
+        top_acts, top_indices, pre_acts = self.encode(x)
 
         # If we aren't given a distinct target, we're autoencoding
         if y is None:
             y = x
 
         # Decode
-        top_acts, top_indices = self.select_topk(pre_acts)
         sae_out = self.decode(top_acts, top_indices)
         if self.W_skip is not None:
             sae_out += x.to(self.dtype) @ self.W_skip.mT
 
         # Compute the residual
-        e = sae_out - y
+        e = y - sae_out
 
         # Used as a denominator for putting everything on a reasonable scale
         total_variance = (y - y.mean(0)).pow(2).sum()
@@ -237,7 +245,7 @@ class SparseCoder(nn.Module):
             # Encourage the top ~50% of dead latents to predict the residual of the
             # top k living latents
             e_hat = self.decode(auxk_acts, auxk_indices)
-            auxk_loss = (e_hat - e).pow(2).sum()
+            auxk_loss = (e_hat - e.detach()).pow(2).sum()
             auxk_loss = scale * auxk_loss / total_variance
         else:
             auxk_loss = sae_out.new_tensor(0.0)
@@ -285,3 +293,7 @@ class SparseCoder(nn.Module):
             self.W_dec.data,
             "d_sae, d_sae d_in -> d_sae d_in",
         )
+
+
+# Allow for alternate naming conventions
+Sae = SparseCoder
